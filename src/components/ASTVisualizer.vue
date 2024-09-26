@@ -109,18 +109,7 @@ function debounce(func, wait) {
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap');
 
-:root {
-  --bg-color: #010610;
-  --settings-bg-color: #061022;
-  --text-color: #e0e6f0;
-  --border-color: #2a3646;
-  --primary-color: #7c4dff;
-  --secondary-color: #00ffbb;
-  --tertiary-color: #ff5722;
-  --hover-color: #1e2a3e;
-  --node-bg: #1a2333;
-  --node-hover: #2c3e50;
-}
+
 
 body, html {
   margin: 0;
@@ -143,9 +132,6 @@ body, html {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-}
-
-.code-editor {
 }
 
 .visualization {
