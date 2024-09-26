@@ -336,6 +336,7 @@ onMounted(() => {
 .code-editor {
   flex-grow: 1;
   overflow: auto;
+  cursor: text;
 }
 
 :deep(.cm-editor) {

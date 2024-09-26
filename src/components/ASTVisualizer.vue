@@ -71,9 +71,7 @@ function debounce(func, wait) {
       <CodeEditor v-model="codeInput" @update:modelValue="handleCodeChange" />
     </div>
     <div class="splitter" @mousedown="startDrag($event, 'code')">
-      <svg viewBox="0 0 24 24" width="24" height="24">
-        <path d="M8 18h8v-2H8v2zm0-4h8v-2H8v2zm0-4h8V8H8v2zm-2 8h12V6H6v12z"/>
-      </svg>
+
     </div>
     <div class="column visualization" :style="{ width: `${columnWidths.visualization}%` }">
       <VisualizationPanel
@@ -91,9 +89,7 @@ function debounce(func, wait) {
       />
     </div>
     <div class="splitter" @mousedown="startDrag($event, 'viz')">
-      <svg viewBox="0 0 24 24" width="24" height="24">
-        <path d="M8 18h8v-2H8v2zm0-4h8v-2H8v2zm0-4h8V8H8v2zm-2 8h12V6H6v12z"/>
-      </svg>
+
     </div>
     <div class="column node-list" :style="{ width: `${columnWidths.nodeList}%` }">
       <NodeTypeList

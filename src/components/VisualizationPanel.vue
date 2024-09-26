@@ -39,7 +39,10 @@ const {
   hoveredNode,
   selectedNode,
   onMouseMove,
-  updateCamera
+  updateCamera,
+  onCameraControlsStart,
+  onCameraControlsEnd,
+  isCameraAnimating
 } = useNodeInteractions(scene, camera, controls, graph, updateInfoPanel, renderer);
 
 const {
@@ -54,9 +57,10 @@ defineExpose({
 });
 
 function updateInfoPanel(nodeData) {
-  emit('updateInfoPanel', nodeData);
+  if (!isCameraAnimating.value) {
+    emit('updateInfoPanel', nodeData);
+  }
 }
-
 function updatePanelVisualization() {
   updateVisualization(props.nodes, props.links);
   updateVisibility(props.visibleNodeTypes);
@@ -90,6 +94,18 @@ function updatePanelVisualization() {
   });
 }
 
+function onMouseDown(event) {
+  if (event.button === 0) { // Left mouse button
+    canvasContainer.value.style.cursor = 'grabbing';
+  }
+}
+
+function onMouseUp(event) {
+  if (event.button === 0) { // Left mouse button
+    canvasContainer.value.style.cursor = 'grab';
+  }
+}
+
 onMounted(() => {
   if (canvasContainer.value) {
     canvasContainer.value.appendChild(renderer.domElement);
@@ -97,12 +113,25 @@ onMounted(() => {
     startRenderLoop();
   }
   canvasContainer.value.addEventListener('mousemove', onMouseMove);
+
+  controls.value.addEventListener('start', onCameraControlsStart);
+  controls.value.addEventListener('end', onCameraControlsEnd);
+
+  canvasContainer.value.addEventListener('mousedown', onMouseDown);
+  window.addEventListener('mouseup', onMouseUp);
+
   updatePanelVisualization()
 });
 
 onUnmounted(() => {
   stopRenderLoop();
   canvasContainer.value.removeEventListener('mousemove', onMouseMove);
+
+  controls.value.removeEventListener('start', onCameraControlsStart);
+  controls.value.removeEventListener('end', onCameraControlsEnd);
+
+  canvasContainer.value.removeEventListener('mousedown', onMouseDown);
+  window.removeEventListener('mouseup', onMouseUp);
 });
 
 watch(() => props.nodes, (newNodes) => {
@@ -126,5 +155,6 @@ watch(() => props.visibleNodeTypes, () => {
   height: 100%;
   overflow: hidden;
   z-index: 1;
+  background: var(--visual-bg-color);
 }
 </style>

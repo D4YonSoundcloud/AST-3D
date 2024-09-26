@@ -5,7 +5,10 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 export function useThreeJS(container) {
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 5000);
-    const renderer = new THREE.WebGLRenderer();
+    const renderer = new THREE.WebGLRenderer({
+        antialias: true, // Enable anti-aliasing
+        alpha: true // Enable transparency
+    });
     const controls = ref(null);
     const graph = new THREE.Group();
 
@@ -21,7 +24,8 @@ export function useThreeJS(container) {
 
         controls.value = new OrbitControls(camera, renderer.domElement);
         controls.value.enableDamping = true;
-        controls.value.dampingFactor = 0.25;
+        controls.value.dampingFactor = 0.1; // Increased for smoother movement
+        controls.value.rotateSpeed = 0.85; // Adjusted for smoother rotation
         controls.value.maxDistance = 4000;
         controls.value.minDistance = 10;
 
