@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JS AST 3D</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #ffffff;
+            --border-color: #464646;
+            --primary-color: #5500ff;
+            --secondary-color: #6c757d;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        #input-container::-webkit-scrollbar {
+            width: 12px;
+        }
+
+        #input-container::-webkit-scrollbar-track {
+            background-color: #95a5a6;
+            border: 1px solid #cacaca;
+        }
+
+        #input-container::-webkit-scrollbar-thumb {
+            background-color: #2c3e50;
+        }
+
+        #code-input::-webkit-scrollbar {
+            width: 12px;
+        }
+
+        #code-input::-webkit-scrollbar-track {
+            background-color: #95a5a6;
+            border: 1px solid #cacaca;
+        }
+
+        #code-input::-webkit-scrollbar-thumb {
+            background-color: #2c3e50;
+        }
+
+        #container {
+            display: flex;
+            height: 100%;
+        }
+
+        #input-container {
+            width: 30%;
+            padding: 0 2rem;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+
+        #visualization {
+            width: 70%;
+            height: 100%;
+        }
+
+        h2 {
+            font-weight: 700;
+            letter-spacing: -1px;
+            margin-bottom: 1rem;
+            color: var(--text-color);
+        }
+
+        textarea {
+            width: 100%;
+            height: 300px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background-color: rgb(0,0,0);
+            color: white;
+            font-family: 'Fira Code', monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+
+        #info-panel {
+            position: absolute;
+            top: 0;
+            right: 2.5%;
+            margin-top: 2rem;
+            padding: 1rem;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        #info-panel h3 {
+            margin-top: 0;
+            letter-spacing: -1px;
+            color: var(--text-color);
+        }
+
+        #info-panel p {
+            margin: 0.5rem 0;
+        }
+
+        #info-panel strong {
+            color: var(--text-color);
+        }
+
+        #info-panel ul {
+            padding-left: 1.5rem;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            #container {
+                flex-direction: column;
+            }
+
+            #input-container, #visualization {
+                width: 100%;
+                height: 50%;
+            }
+        }
+    </style>
+</head>
+<body>
+<div id="container">
+    <div id="input-container">
+        <h2>Javascript AST 3D Visualizer</h2>
+        <textarea id="code-input" placeholder="Paste your JavaScript code here..."></textarea>
+        <div id="info-panel">Hover over a node to see details</div>
+    </div>
+    <canvas id="visualization"></canvas>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/acorn/8.7.0/acorn.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/6.7.0/d3.min.js"></script>
+<script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@v0.149.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@v0.149.0/examples/jsm/"
+      }
+    }
+</script>
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    const codeInput = document.getElementById('code-input');
+    const infoPanel = document.getElementById('info-panel');
+    const canvas = document.getElementById('visualization');
+
+    let scene, camera, renderer, graph, controls, nodes, links;
+    let highlightedNodes = new Set();
+    let hoveredNode = null;
+
+    let nodeTypes = new Set();
+    let visibleNodeTypes = new Set();
+
+    // Add this object to store descriptions for each node type
+    const NODE_DESCRIPTIONS = {
+        Program: "The root node of the entire AST.",
+        VariableDeclaration: "Declares one or more variables.",
+        VariableDeclarator: "Represents the binding of a variable to its initial value.",
+        Identifier: "An identifier, representing a variable or property name.",
+        CallExpression: "Represents a function call.",
+        MemberExpression: "Represents accessing a property of an object.",
+        Literal: "A literal value, such as a string, number, or boolean.",
+        NewExpression: "Creating a new object with a constructor function.",
+        ObjectExpression: "Represents an object literal.",
+        Property: "Represents a property in an object literal.",
+        FunctionDeclaration: "Declares a function with a given name and parameters.",
+        BlockStatement: "A block of statements, usually enclosed in braces.",
+        ExpressionStatement: "A statement consisting of a single expression.",
+        AssignmentExpression: "Assigns a value to a variable or property.",
+        BinaryExpression: "An expression with a binary operator, like addition or comparison.",
+        ArrayExpression: "Represents an array literal.",
+        SwitchStatement: "A switch statement, with cases and possibly a default.",
+        SwitchCase: "A case in a switch statement.",
+        ConditionalExpression: "A ternary conditional expression (condition ? expr1 : expr2).",
+        ArrowFunctionExpression: "Represents an arrow function expression.",
+        BreakStatement: "A break statement, used to exit loops or switch statements.",
+        LogicalExpression: "An expression with a logical operator (&&, ||, ??).",
+        IfStatement: "An if statement, possibly with an else clause.",
+        ReturnStatement: "A return statement in a function.",
+        UpdateExpression: "An update expression, like increment or decrement.",
+        ForInStatement: "A for...in loop, used to iterate over object properties.",
+        UnaryExpression: "An expression with a unary operator, like negation or typeof.",
+        ForStatement: "A standard for loop.",
+        SpreadElement: "A spread element in an array literal or function call.",
+        WhileStatement: "A while loop.",
+        ChainExpression: "Represents optional chaining (?.) in member expressions.",
+        TemplateLiteral: "A template literal string, possibly with embedded expressions.",
+        TemplateElement: "A part of a template literal, either a string or an expression."
+    };
+
+    const NODE_TYPES = {
+        // Existing types
+        FunctionDeclaration: { color: 0x00ff0a, shape: 'sphere' },
+        VariableDeclaration: { color: 0x00fffd, shape: 'sphere' },
+        IfStatement: { color: 0xedff00, shape: 'box' },
+        ForStatement: { color: 0xff8a00, shape: 'box' },
+
+        // New types
+        Program: { color: 0x9C27B0, shape: 'sphere' },
+        VariableDeclarator: { color: 0x01a756, shape: 'tetrahedron' },
+        Identifier: { color: 0x3F51B5, shape: 'tetrahedron' },
+        CallExpression: { color: 0xE91E63, shape: 'octahedron' },
+        MemberExpression: { color: 0x009688, shape: 'octahedron' },
+        Literal: { color: 0x1e4d54, shape: 'icosahedron' },
+        NewExpression: { color: 0x8BC34A, shape: 'octahedron' },
+        ObjectExpression: { color: 0xff791b, shape: 'octahedron' },
+        Property: { color: 0xf9a44a, shape: 'octahedron' },
+        BlockStatement: { color: 0xffffff, shape: 'box' },
+        ExpressionStatement: { color: 0xff38ca, shape: 'box' },
+        AssignmentExpression: { color: 0xF44336, shape: 'octahedron' },
+        BinaryExpression: { color: 0x673AB7, shape: 'octahedron' },
+        ArrayExpression: { color: 0xCDDC39, shape: 'octahedron' },
+        SwitchStatement: { color: 0x03A9F4, shape: 'icosahedron' },
+        SwitchCase: { color: 0x00BCD4, shape: 'box' },
+        ConditionalExpression: { color: 0xFFEB3B, shape: 'octahedron' },
+        ArrowFunctionExpression: { color: 0x4CAF50, shape: 'octahedron' },
+        BreakStatement: { color: 0xFF5722, shape: 'box' },
+        LogicalExpression: { color: 0x9C27B0, shape: 'octahedron' },
+        ReturnStatement: { color: 0x2196F3, shape: 'box' },
+        UpdateExpression: { color: 0xFFC107, shape: 'octahedron' },
+        ForInStatement: { color: 0xFF9800, shape: 'box' },
+        UnaryExpression: { color: 0x795548, shape: 'octahedron' },
+        SpreadElement: { color: 0x607D8B, shape: 'tetrahedron' },
+        WhileStatement: { color: 0x9E9E9E, shape: 'box' },
+        ChainExpression: { color: 0xF44336, shape: 'octahedron' },
+        TemplateLiteral: { color: 0x673AB7, shape: 'icosahedron' },
+        TemplateElement: { color: 0xCDDC39, shape: 'icosahedron' }
+    };
+
+    function initVisualization() {
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(30, canvas.clientWidth / canvas.clientHeight, 0.1, 2000);
+        renderer = new THREE.WebGLRenderer({ canvas });
+        renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+
+        camera.position.set(200, 200, 300);
+        camera.lookAt(0, 0, 0);
+
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.dampingFactor = 0.25;
+        controls.maxDistance = 1000;
+        controls.minDistance = 10;
+
+        graph = new THREE.Group();
+        scene.add(graph);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const pointLight = new THREE.PointLight(0xF44336, 0.8);
+        pointLight.position.set(200, 300, 200);
+        pointLight.lookAt(0,0,0)
+        scene.add(pointLight);
+
+        const pointLight2 = new THREE.PointLight(0x00ff0a, 0.8);
+        pointLight2.position.set(450, -350, -200);
+        pointLight2.lookAt(0,0,0)
+        scene.add(pointLight2);
+
+        animate();
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    function analyzeCode(code) {
+        const ast = acorn.parse(code, { ecmaVersion: 2020, locations: true });
+        nodes = [];
+        links = [];
+        nodeTypes.clear();
+        let scopeLevel = 0;
+        let scopeStack = [{ id: 'global', level: 0, nodes: [] }];
+
+
+        function addNode(node, parent) {
+            const nodeObj = {
+                id: nodes.length,
+                type: node.type,
+                loc: node.loc,
+                parent: parent,
+                children: [],
+                dependencies: [],
+                scopeLevel: scopeLevel
+            };
+
+            switch (node.type) {
+                case 'FunctionDeclaration':
+                case 'FunctionExpression':
+                    nodeObj.name = node.id ? node.id.name : 'anonymous';
+                    nodeObj.params = node.params.map(p => p.name);
+                    break;
+                case 'VariableDeclaration':
+                    nodeObj.kind = node.kind;
+                    nodeObj.declarations = node.declarations.map(d => ({
+                        name: d.id.name,
+                        init: d.init ? d.init.type : null
+                    }));
+                    break;
+                case 'CallExpression':
+                    nodeObj.callee = node.callee.name || node.callee.type;
+                    nodeObj.arguments = node.arguments.length;
+                    break;
+                // Add more cases for other node types as needed
+            }
+
+            nodes.push(nodeObj);
+            if (parent !== undefined) {
+                links.push({ source: parent, target: nodeObj.id, type: 'parent-child' });
+                nodes[parent].children.push(nodeObj.id);
+            }
+
+            // Add the node to the current scope
+            scopeStack[scopeStack.length - 1].nodes.push(nodeObj.id);
+
+            nodeTypes.add(node.type);
+            visibleNodeTypes.add(node.type);
+
+            return nodeObj.id;
+        }
+
+        function traverse(node, parent) {
+            const nodeId = addNode(node, parent);
+
+            if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression') {
+                scopeLevel++;
+                scopeStack.push({ id: nodeId, level: scopeLevel, nodes: [] });
+            }
+
+            for (const key in node) {
+                if (node[key] && typeof node[key] === 'object') {
+                    if (Array.isArray(node[key])) {
+                        node[key].forEach(child => {
+                            if (child && typeof child === 'object' && 'type' in child) {
+                                traverse(child, nodeId);
+                            }
+                        });
+                    } else if ('type' in node[key]) {
+                        traverse(node[key], nodeId);
+                    }
+                }
+            }
+
+            if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression') {
+                scopeStack.pop();
+                scopeLevel--;
+            }
+        }
+
+        traverse(ast);
+
+        // Analyze dependencies
+        nodes.forEach(node => {
+            if (node.type === 'Identifier') {
+                const declaration = findDeclaration(node.name, node.scopeLevel);
+                if (declaration && declaration.id !== node.id) {
+                    node.dependencies.push(declaration.id);
+                    links.push({ source: node.id, target: declaration.id, type: 'dependency' });
+                }
+            }
+        });
+
+        return { nodes, links };
+    }
+
+    function findDeclaration(name, scopeLevel) {
+        for (let level = scopeLevel; level >= 0; level--) {
+            const declaration = nodes.find(n =>
+                n.scopeLevel === level &&
+                (n.type === 'VariableDeclaration' || n.type === 'FunctionDeclaration') &&
+                (n.name === name || (n.declarations && n.declarations.some(d => d.name === name)))
+            );
+            if (declaration) return declaration;
+        }
+        return null;
+    }
+
+    function createNodeGeometry(node) {
+        const nodeType = NODE_TYPES[node.type] || { color: 0xAAAAAA, shape: 'sphere' };
+        let geometry;
+
+        const size = Math.min(5 + node.children.length, 15); // Base size on number of children
+
+        switch (nodeType.shape) {
+            case 'cube':
+            case 'box':
+                geometry = new THREE.BoxGeometry(size, size, size);
+                break;
+            case 'sphere':
+                geometry = new THREE.SphereGeometry(size / 2, 32, 32);
+                break;
+            case 'cone':
+                geometry = new THREE.ConeGeometry(size / 2, size, 16);
+                break;
+            case 'cylinder':
+                geometry = new THREE.CylinderGeometry(size / 2, size / 2, size, 16);
+                break;
+            case 'octahedron':
+                geometry = new THREE.OctahedronGeometry(size / 2);
+                break;
+            case 'dodecahedron':
+                geometry = new THREE.DodecahedronGeometry(size / 2);
+                break;
+            case 'tetrahedron':
+                geometry = new THREE.TetrahedronGeometry(size / 2);
+                break;
+            case 'torusKnot':
+                geometry = new THREE.TorusKnotGeometry(size / 4, size / 8, 64, 8);
+                break;
+            case 'torus':
+                geometry = new THREE.TorusGeometry(size / 3, size / 6, 16, 100);
+                break;
+            case 'icosahedron':
+                geometry = new THREE.IcosahedronGeometry(size / 2);
+                break;
+            default:
+                geometry = new THREE.SphereGeometry(size / 2, 32, 32);
+        }
+
+
+        const material = new THREE.MeshLambertMaterial({
+            color: nodeType.color,
+            transparent: false,
+            opacity: 1
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+
+        // Use scopeLevel directly for vertical positioning
+        mesh.position.set(
+            (Math.random() - 0.5) * 200,
+            // -node.scopeLevel * 100 + Math.random() * 30, // Negative to ensure deeper scopes are lower
+            -node.scopeLevel * 100 + Math.random() * 5 + (5 + (node.children.length * 1.5)), // Negative to ensure deeper scopes are lower
+            (Math.random() - 0.5) * 200
+        );
+
+        mesh.userData = { ...node };
+        return mesh;
+    }
+
+    function createLinkGeometry(source, target, type) {
+        const material = new THREE.LineBasicMaterial({
+            color: type === 'dependency' ? 0xFF0000 : 0xAAAAAA,
+            transparent: true,
+            opacity: 0.5,
+            linewidth: type === 'dependency' ? 2 : 1
+        });
+        const geometry = new THREE.BufferGeometry().setFromPoints([source.position, target.position]);
+        const line = new THREE.Line(geometry, material);
+        line.userData = {
+            type: type,
+            sourceId: source.userData.id,
+            targetId: target.userData.id
+        };
+        return line;
+    }
+
+    function updateVisualization(analysisResult) {
+        // Clear existing visualization
+        while(graph.children.length > 0) {
+            graph.remove(graph.children[0]);
+        }
+
+        // Create new nodes
+        const nodeObjects = analysisResult.nodes.map(createNodeGeometry);
+        nodeObjects.forEach(node => graph.add(node));
+
+        // Create new links
+        analysisResult.links.forEach(link => {
+            const sourceNode = nodeObjects[link.source];
+            const targetNode = nodeObjects[link.target];
+            const linkObject = createLinkGeometry(sourceNode, targetNode, link.type);
+            graph.add(linkObject);
+        });
+
+        // Apply force-directed layout
+
+        // Create node type selector
+        createNodeTypeSelector();
+
+        // Update visibility based on current selection
+        updateVisibility();
+    }
+
+    function applyForceDirectedLayout(nodes, links) {
+        const simulationNodes = nodes.map(node => ({
+            x: node.position.x,
+            y: node.position.y,
+            z: node.position.z,
+            vx: 0,
+            vy: 0,
+            vz: 0,
+            id: node.userData.id
+        }));
+
+        const simulationLinks = links.map(link => ({
+            source: simulationNodes.find(n => n.id === link.source.userData.id),
+            target: simulationNodes.find(n => n.id === link.target.userData.id)
+        }));
+
+        function forceSimulation() {
+            const alpha = 0.1;
+            const centerForce = 0.05;
+            const linkDistance = 30;
+            const linkStrength = 0.1;
+            const manyBodyStrength = -50;
+
+            // Apply forces
+            simulationNodes.forEach(node => {
+                // Center force
+                node.vx += (0 - node.x) * centerForce * alpha;
+                node.vy += (0 - node.y) * centerForce * alpha;
+                node.vz += (0 - node.z) * centerForce * alpha;
+
+                // Many-body force
+                simulationNodes.forEach(otherNode => {
+                    if (node !== otherNode) {
+                        const dx = node.x - otherNode.x;
+                        const dy = node.y - otherNode.y;
+                        const dz = node.z - otherNode.z;
+                        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                        if (distance > 0) {
+                            const force = manyBodyStrength * alpha / (distance * distance);
+                            node.vx += dx * force;
+                            node.vy += dy * force;
+                            node.vz += dz * force;
+                        }
+                    }
+                });
+            });
+
+            // Link force
+            simulationLinks.forEach(link => {
+                const dx = link.target.x - link.source.x;
+                const dy = link.target.y - link.source.y;
+                const dz = link.target.z - link.source.z;
+                const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (distance > 0) {
+                    const force = (distance - linkDistance) * linkStrength * alpha;
+                    const fx = dx * force / distance;
+                    const fy = dy * force / distance;
+                    const fz = dz * force / distance;
+
+                    link.source.vx += fx;
+                    link.source.vy += fy;
+                    link.source.vz += fz;
+                    link.target.vx -= fx;
+                    link.target.vy -= fy;
+                    link.target.vz -= fz;
+                }
+            });
+
+            // Update positions
+            simulationNodes.forEach(node => {
+                node.x += node.vx;
+                node.y += node.vy;
+                node.z += node.vz;
+                node.vx *= 0.9;
+                node.vy *= 0.9;
+                node.vz *= 0.9;
+            });
+        }
+
+        // Run simulation
+        for (let i = 0; i < 300; i++) {
+            forceSimulation();
+        }
+
+        // Update Three.js object positions
+        nodes.forEach(node => {
+            const simNode = simulationNodes.find(n => n.id === node.userData.id);
+            node.position.set(simNode.x, simNode.y, simNode.z);
+        });
+
+        // Update link geometries
+        links.forEach(link => {
+            const sourceNode = nodes.find(n => n.userData.id === link.source.userData.id);
+            const targetNode = nodes.find(n => n.userData.id === link.target.userData.id);
+            link.geometry.setFromPoints([sourceNode.position, targetNode.position]);
+            link.geometry.verticesNeedUpdate = true;
+        });
+    }
+
+    function highlightConnectedNodes(nodeId) {
+        highlightedNodes.clear();
+        highlightedNodes.add(nodeId);
+
+        graph.children.forEach(child => {
+            if (child instanceof THREE.Mesh) {
+                const isHighlighted = child.userData.id === nodeId;
+                const baseColor = NODE_TYPES[child.userData.type]?.color || 0xAAAAAA;
+                child.material.color.setHex(isHighlighted ? 0xFF0000 : baseColor);
+                child.material.emissive.setHex(isHighlighted ? 0x330000 : 0x000000);
+                child.scale.setScalar(isHighlighted ? 1.2 : 1);
+            } else if (child instanceof THREE.Line) {
+                const isConnected = child.userData.sourceId === nodeId || child.userData.targetId === nodeId;
+                child.material.color.setHex(isConnected ? 0x00FF00 : (child.userData.type === 'dependency' ? 0xFF0000 : 0xAAAAAA));
+                child.material.opacity = isConnected ? 1 : 0.2;
+            }
+        });
+    }
+
+    function resetHighlight() {
+        graph.children.forEach(child => {
+            if (child instanceof THREE.Mesh) {
+                const baseColor = NODE_TYPES[child.userData.type]?.color || 0xAAAAAA;
+                child.material.color.setHex(baseColor);
+                child.material.emissive.setHex(0x000000);
+                child.scale.setScalar(1);
+            } else if (child instanceof THREE.Line) {
+                child.material.color.setHex(child.userData.type === 'dependency' ? 0xFF0000 : 0xAAAAAA);
+                child.material.opacity = 0.5;
+            }
+        });
+    }
+
+    function onMouseMove(event) {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = ((event.clientX - rect.left) / canvas.clientWidth) * 2 - 1;
+        const mouseY = -((event.clientY - rect.top) / canvas.clientHeight) * 2 + 1;
+
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), camera);
+
+        const intersects = raycaster.intersectObjects(graph.children);
+
+        if (intersects.length > 0) {
+            const intersectedNode = intersects[0].object;
+            if (intersectedNode.userData && intersectedNode.userData.id !== undefined) {
+                if (hoveredNode !== intersectedNode) {
+                    hoveredNode = intersectedNode;
+                    highlightConnectedNodes(intersectedNode.userData.id);
+                    updateInfoPanel(intersectedNode.userData);
+                }
+            }
+        } else if (hoveredNode) {
+            hoveredNode = null;
+            resetHighlight();
+            updateInfoPanel(null);
+        }
+    }
+
+    function updateInfoPanel(nodeData) {
+        if (nodeData) {
+            let content = `
+            <h3>${nodeData.type}</h3>
+            <p><strong>ID:</strong> ${nodeData.id}</p>
+            <p><strong>Location:</strong> Line ${nodeData.loc.start.line}, Column ${nodeData.loc.start.column}</p>
+            <p><strong>Scope Level:</strong> ${nodeData.scopeLevel}</p>
+        `;
+
+            switch (nodeData.type) {
+                case 'FunctionDeclaration':
+                case 'FunctionExpression':
+                    content += `
+                    <p><strong>Name:</strong> ${nodeData.name}</p>
+                    <p><strong>Parameters:</strong> ${nodeData.params.join(', ')}</p>
+                `;
+                    break;
+                case 'VariableDeclaration':
+                    content += `
+                    <p><strong>Kind:</strong> ${nodeData.kind}</p>
+                    <p><strong>Declarations:</strong></p>
+                    <ul>
+                        ${nodeData.declarations.map(d => `<li>${d.name}${d.init ? ` (initialized as ${d.init})` : ''}</li>`).join('')}
+                    </ul>
+                `;
+                    break;
+                case 'CallExpression':
+                    content += `
+                    <p><strong>Callee:</strong> ${nodeData.callee}</p>
+                    <p><strong>Arguments:</strong> ${nodeData.arguments}</p>
+                `;
+                    break;
+            }
+
+            content += `
+            <p><strong>Children:</strong> ${nodeData.children.length}</p>
+            <p><strong>Dependencies:</strong> ${nodeData.dependencies.length}</p>
+        `;
+
+            infoPanel.innerHTML = content;
+        } else {
+            infoPanel.innerHTML = '<p>Hover over a node to see details</p>';
+        }
+    }
+
+    function showRelationships(nodeId) {
+        const node = nodes.find(n => n.id === nodeId);
+        if (!node) return;
+
+        graph.children.forEach(child => {
+            if (child instanceof THREE.Mesh) {
+                const isRelated = child.userData.id === nodeId ||
+                    node.children.includes(child.userData.id) ||
+                    node.dependencies.includes(child.userData.id);
+                child.material.opacity = isRelated ? 1 : 0.3;
+            } else if (child instanceof THREE.Line) {
+                const isRelated = child.userData.source === nodeId || child.userData.target === nodeId;
+                child.material.opacity = isRelated ? 1 : 0.1;
+            }
+        });
+
+        updateInfoPanel({
+            ...node,
+            children: node.children.map(id => nodes.find(n => n.id === id).type),
+            dependencies: node.dependencies.map(id => nodes.find(n => n.id === id).type)
+        });
+    }
+
+    function createNodeTypeSelector() {
+        removeNodeTypeSelector(); // Remove existing selector if any
+
+        const container = document.getElementById('input-container');
+        const selector = document.createElement('div');
+        selector.id = 'node-type-selector';
+        selector.innerHTML = '<h3>Node Types</h3>';
+
+        nodeTypes.forEach(type => {
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = `checkbox-${type}`;
+            checkbox.checked = true;
+            checkbox.addEventListener('change', () => toggleNodeType(type));
+
+            const label = document.createElement('label');
+            label.htmlFor = `checkbox-${type}`;
+            label.textContent = type;
+            label.title = NODE_DESCRIPTIONS[type] || "No description available";
+
+            const div = document.createElement('div');
+            div.className = 'node-type-option';
+            div.appendChild(checkbox);
+            div.appendChild(label);
+            selector.appendChild(div);
+        });
+
+        container.insertBefore(selector, document.getElementById('info-panel'));
+    }
+
+    function removeNodeTypeSelector() {
+        const existingSelector = document.getElementById('node-type-selector');
+        if (existingSelector) {
+            existingSelector.remove();
+        }
+    }
+    function toggleNodeType(type) {
+        if (visibleNodeTypes.has(type)) {
+            visibleNodeTypes.delete(type);
+        } else {
+            visibleNodeTypes.add(type);
+        }
+        updateVisibility();
+    }
+
+    function updateVisibility() {
+        graph.children.forEach(child => {
+            if (child instanceof THREE.Mesh) {
+                const isVisible = visibleNodeTypes.has(child.userData.type);
+                child.visible = isVisible;
+            } else if (child instanceof THREE.Line) {
+                const sourceVisible = graph.children.find(node => node instanceof THREE.Mesh && node.userData.id === child.userData.sourceId)?.visible;
+                const targetVisible = graph.children.find(node => node instanceof THREE.Mesh && node.userData.id === child.userData.targetId)?.visible;
+                child.visible = sourceVisible && targetVisible;
+            }
+        });
+    }
+
+    codeInput.addEventListener('input', debounce(() => {
+        const code = codeInput.value;
+        const analysisResult = analyzeCode(code);
+        updateVisualization(analysisResult);
+    }, 300)); // Debounce for 300ms to avoid excessive updates
+
+    canvas.addEventListener('mousemove', onMouseMove);
+
+    // canvas.addEventListener('click', (event) => {
+    //     const raycaster = new THREE.Raycaster();
+    //     const mouse = new THREE.Vector2(
+    //         (event.clientX / window.innerWidth) * 2 - 1,
+    //         -(event.clientY / window.innerHeight) * 2 + 1
+    //     );
+    //
+    //     raycaster.setFromCamera(mouse, camera);
+    //     const intersects = raycaster.intersectObjects(graph.children);
+    //
+    //     if (intersects.length > 0) {
+    //         const clickedNode = intersects[0].object;
+    //         if (clickedNode.userData.id !== undefined) {
+    //             showRelationships(clickedNode.userData.id);
+    //         }
+    //     }
+    // });
+
+    window.addEventListener('resize', () => {
+        camera.aspect = canvas.clientWidth / canvas.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+    });
+
+    // Add a debounce function to limit the frequency of updates
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    const style = document.createElement('style');
+    style.textContent += `
+    .node-type-option {
+        position: relative;
+        margin: 0.5rem 0;
+    }
+    .node-type-option label {
+        margin-left: 0.5rem;
+        cursor: pointer;
+    }
+    .node-type-option label:hover::after {
+        content: attr(title);
+        position: absolute;
+        top: 0;
+        transform: translateX(5px) translateY(-5px);
+        margin-left: 0.5rem;
+        background-color: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 0.5rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        white-space: wrap;
+        z-index: 1000;
+        pointer-events: none;
+    }`;
+
+    document.head.appendChild(style);
+
+    initVisualization();
+</script>
+</body>
+</html>

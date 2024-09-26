@@ -1,0 +1,52 @@
+{
+  "name": "3dast",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@codemirror/commands": "6.x",
+    "@codemirror/lang-cpp": "^6.0.0",
+    "@codemirror/lang-html": "^6.0.0",
+    "@codemirror/lang-java": "^6.0.0",
+    "@codemirror/lang-javascript": "^6.0.0",
+    "@codemirror/lang-json": "^6.0.0",
+    "@codemirror/lang-lezer": "^6.0.0",
+    "@codemirror/lang-markdown": "^6.0.0",
+    "@codemirror/lang-php": "^6.0.0",
+    "@codemirror/lang-python": "^6.0.0",
+    "@codemirror/lang-rust": "^6.0.0",
+    "@codemirror/lang-sql": "^6.0.0",
+    "@codemirror/lang-xml": "^6.0.0",
+    "@codemirror/language": "6.x",
+    "@codemirror/legacy-modes": "^6.0.0",
+    "@codemirror/state": "6.x",
+    "@codemirror/theme-one-dark": "^6.0.0",
+    "@codemirror/view": "6.x",
+    "@uiw/codemirror-theme-github": "^4.23.3",
+    "@uiw/codemirror-theme-material": "^4.23.3",
+    "@uiw/codemirror-theme-monokai": "^4.23.3",
+    "@uiw/codemirror-theme-nord": "^4.23.3",
+    "@uiw/codemirror-theme-solarized": "^4.23.3",
+    "acorn": "^8.12.1",
+    "codemirror": "6.x",
+    "d3": "^7.9.0",
+    "dat.gui": "^0.7.9",
+    "gsap": "^3.12.5",
+    "pinia": "^2.1.7",
+    "stats.js": "^0.17.0",
+    "three": "^0.149.0",
+    "vue": "^3.4.29",
+    "vue-router": "^4.3.3"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.5",
+    "vite": "^5.3.1",
+    "vite-plugin-monaco-editor": "^1.1.0",
+    "vite-plugin-vue-devtools": "^7.3.1"
+  }
+}
