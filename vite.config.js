@@ -7,10 +7,10 @@ import monacoEditorPlugin from 'vite-plugin-monaco-editor'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: "/AST-3D/",
   plugins: [
     vue(),
-    vueDevTools(),
-
+    vueDevTools()
   ],
   resolve: {
     alias: {

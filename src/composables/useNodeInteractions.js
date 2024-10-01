@@ -3,14 +3,18 @@ import * as THREE from 'three';
 import gsap from 'gsap';
 import {LOD} from "three";
 import {Frustum} from "three";
+import { useSettingsStore } from '../stores/settingsStore';
 
 export function useNodeInteractions(scene, camera, controls, graph, updateInfoPanel, renderer) {
+    const settingsStore = useSettingsStore();
+
     const hoveredNode = ref(null);
     const selectedNode = ref(null);
     const originalCameraPosition = ref(null);
     const originalControlsTarget = ref(null);
     const isMovingCamera = ref(false);
     const isCameraAnimating = ref(false);
+    const cursorType = ref('grab');
 
     const COLORS = {
         DEFAULT: 0xAAAAAA,
@@ -29,7 +33,7 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
 
     function onMouseMove(event) {
         if (isMovingCamera.value || isCameraAnimating.value) {
-            updateEdgeHighlightOnly();
+            // updateEdgeHighlightOnly();
             return;
         }
 
@@ -49,6 +53,7 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
                     hoveredNode.value = intersectedLOD;
                     updateHighlight();
                     updateInfoPanel(intersectedLOD.userData);
+                    cursorType.value = 'crosshair';
                 }
             }
 
@@ -62,6 +67,7 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
                 hoveredNode.value = null;
                 updateHighlight();
                 updateInfoPanel(null);
+                cursorType.value = 'grab';
             }
 
             renderer.domElement.onclick = null
@@ -79,94 +85,8 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
 
         graph.children.forEach(child => {
             if (child instanceof LOD && child.visible) {
-                const isSelected = child.userData.id === selectedNode.value;
-                const isHovered = child === hoveredNode.value;
-                const isConnectedToSelected = hasSelectedNode &&
-                    graph.children.some(line =>
-                        line instanceof THREE.Line &&
-                        ((line.userData.source.userData.id === selectedNode.value && line.userData.target === child) ||
-                            (line.userData.target.userData.id === selectedNode.value && line.userData.source === child))
-                    );
-                const isConnectedToHovered = hasHoveredNode &&
-                    graph.children.some(line =>
-                        line instanceof THREE.Line &&
-                        ((line.userData.source === hoveredNode.value && line.userData.target === child) ||
-                            (line.userData.target === hoveredNode.value && line.userData.source === child))
-                    );
-
-                const baseColor = new THREE.Color(child.userData.originalColor);
-
-                child.levels.forEach(level => {
-                    level.object.material.color.set(baseColor);
-                    level.object.material.emissive.setHex(0x000000);
-                });
-
-                child.scale.setScalar(isSelected || isHovered ? 1.15 : 1);
-
-                // Keep selected, connected, and hovered nodes fully opaque
-                const opacity = isSelected || isConnectedToSelected || isHovered || isConnectedToHovered || !hasSelectedNode ? 1 : 0.3;
-
-                child.levels.forEach(level => {
-                    level.object.material.opacity = opacity;
-                    level.object.material.transparent = opacity < 1;
-                    level.object.material.needsUpdate = true;
-                });
-
-                // Add a subtle glow to connected nodes
-                if (isConnectedToSelected && !isSelected) {
-                    child.levels.forEach(level => {
-                        level.object.material.emissive.setHex(0x222222);
-                    });
-                }
-
+                updateNodeHighlight(child, hasSelectedNode, hasHoveredNode);
             } else if (child instanceof THREE.Line && child.visible) {
-                const isConnectedToSelected = hasSelectedNode &&
-                    (child.userData.source.userData.id === selectedNode.value ||
-                        child.userData.target.userData.id === selectedNode.value);
-
-                const isConnectedToHovered = hasHoveredNode &&
-                    (child.userData.source.userData.id === hoveredNode.value.userData.id ||
-                        child.userData.target.userData.id === hoveredNode.value.userData.id);
-
-                if (isConnectedToSelected) {
-                    child.material.color.setHex(COLORS.SELECTED);
-                    child.material.opacity = 1;
-                    child.renderOrder = 2;
-                } else if (isConnectedToHovered) {
-                    child.material.color.setHex(hasSelectedNode ? COLORS.HOVERED_NONCONNECTED : COLORS.HOVERED);
-                    child.material.opacity = 1;
-                    child.renderOrder = 1;
-                } else {
-                    // Reset to default state
-                    child.material.color.setHex(child.userData.type === 'dependency' ? 0x989898 :
-                        child.userData.sourceType === 'Program' ? 0x282828 :
-                            COLORS.DEFAULT);
-                    child.material.opacity = hasSelectedNode ? 0.3 : 0.5;  // Increased opacity for non-connected edges
-                    child.renderOrder = 0;
-                }
-
-                child.material.transparent = child.material.opacity < 1;
-                child.material.needsUpdate = true;
-            }
-        });
-
-        graph.children.forEach(child => {
-            if (child instanceof THREE.Line && child.visible) {
-                const sourceRenderOrder = child.userData.source.renderOrder || 0;
-                const targetRenderOrder = child.userData.target.renderOrder || 0;
-                child.renderOrder = Math.max(sourceRenderOrder, targetRenderOrder, child.renderOrder);
-            }
-        });
-
-        renderer.render(scene, camera);
-    }
-
-    function updateEdgeHighlightOnly() {
-        const hasSelectedNode = selectedNode.value !== null;
-        const hasHoveredNode = hoveredNode.value !== null;
-
-        graph.children.forEach(child => {
-            if (child instanceof THREE.Line && child.visible) {
                 updateEdgeHighlight(child, hasSelectedNode, hasHoveredNode);
             }
         });
@@ -190,19 +110,19 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
 
         node.scale.setScalar(isSelected || isHovered ? 1.15 : 1);
 
+        const opacity = isSelected || isConnectedToSelected || isHovered || isConnectedToHovered || !hasSelectedNode ? 1 : 0.2;
+
         node.levels.forEach(level => {
-            // Keep selected, connected, and hovered nodes fully opaque
-            level.object.material.opacity = isSelected || isConnectedToSelected || isHovered || isConnectedToHovered || !hasSelectedNode ? 1 : 0.2;
-            level.object.material.transparent = true;
+            level.object.material.opacity = opacity;
+            level.object.material.transparent = opacity < 1;
             level.object.material.needsUpdate = true;
         });
 
-        // Optionally, we can add a glow effect to connected nodes
-        // if (isConnectedToSelected && !isSelected) {
-        //     node.levels.forEach(level => {
-        //         level.object.material.emissive.setHex(0x444444);
-        //     });
-        // }
+        if (isConnectedToSelected && !isSelected) {
+            node.levels.forEach(level => {
+                level.object.material.emissive.setHex(0x444444);
+            });
+        }
     }
 
     function updateEdgeHighlight(edge, hasSelectedNode, hasHoveredNode) {
@@ -210,27 +130,28 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
         const isConnectedToHovered = hasHoveredNode && isConnectedTo(edge, hoveredNode.value.userData.id);
 
         if (isConnectedToSelected) {
-            setEdgeProperties(edge, COLORS.SELECTED, 1, 2);
+            setEdgeProperties(edge, settingsStore.linkColors.selected, 1, 2);
         } else if (isConnectedToHovered) {
-            setEdgeProperties(edge, hasSelectedNode ? COLORS.HOVERED_NONCONNECTED : COLORS.HOVERED, 1, 1);
+            setEdgeProperties(edge, hasSelectedNode ? settingsStore.linkColors.hover : settingsStore.linkColors.hover, 1, 1);
         } else {
             setEdgeProperties(edge,
                 edge.userData.type === 'dependency' ? 0x989898 :
-                    edge.userData.sourceType === 'Program' ? 0x282828 : COLORS.DEFAULT,
-                hasSelectedNode ? 0.2 : 1, 0); // Increased opacity for non-connected edges when a node is selected
+                    edge.userData.sourceType === 'Program' ? 0x282828 : settingsStore.linkColors.normal,
+                hasSelectedNode ? 0.2 : 1, 0);
         }
-    }
-    function isConnectedTo(object, nodeId) {
-        return (object.userData.source && object.userData.source.userData.id === nodeId) ||
-            (object.userData.target && object.userData.target.userData.id === nodeId);
     }
 
     function setEdgeProperties(edge, color, opacity, renderOrder) {
         edge.material.color.setHex(color);
         edge.material.opacity = opacity;
         edge.renderOrder = renderOrder;
-        edge.material.transparent = true;
+        edge.material.transparent = opacity < 1;
         edge.material.needsUpdate = true;
+    }
+
+    function isConnectedTo(object, nodeId) {
+        return (object.userData.source && object.userData.source.userData.id === nodeId) ||
+            (object.userData.target && object.userData.target.userData.id === nodeId);
     }
 
     function updateRenderOrder() {
@@ -385,6 +306,7 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
         updateCamera,
         onCameraControlsStart,
         onCameraControlsEnd,
-        isCameraAnimating
+        isCameraAnimating,
+        cursorType,
     };
 }

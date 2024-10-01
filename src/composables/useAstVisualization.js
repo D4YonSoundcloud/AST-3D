@@ -1,9 +1,12 @@
 import * as THREE from 'three';
 import { LOD } from 'three';
-import { ref, shallowRef } from 'vue';
+import {ref, shallowRef, watch} from 'vue';
 import { getNodeConfig, NODE_TYPES, DEFAULT_NODE_TYPE } from '../assets/astNodeConfig';
+import { useSettingsStore } from '../stores/settingsStore';
 
 export function useAstVisualization(scene, graph) {
+    const settingsStore = useSettingsStore();
+
     const visibleNodes = shallowRef(new Set());
     const visibleLinks = shallowRef(new Set());
     const nodesByType = shallowRef(new Map());
@@ -18,8 +21,19 @@ export function useAstVisualization(scene, graph) {
         { distance: 150, detail: 'low' },
     ]);
 
+    function getNodeConfig(type) {
+        // Add a check to ensure the type exists in the settings
+        if (settingsStore.settings[type]) {
+            return settingsStore.settings[type];
+        }
+        // If the specific type doesn't exist, return a default configuration
+        console.warn(`No configuration found for node type: ${type}. Using default.`);
+        return { color: 0x808080, shape: 'sphere' };
+    }
+
     function createLODObject(nodeType, childrenCount) {
         const lod = new THREE.LOD();
+        const nodeConfig = getNodeConfig(nodeType);
 
         lodLevels.value.forEach(level => {
             const mesh = createMeshForDetail(nodeType, childrenCount, level.detail);
@@ -32,11 +46,8 @@ export function useAstVisualization(scene, graph) {
     function createMeshForDetail(nodeType, childrenCount, detailLevel) {
         const nodeConfig = getNodeConfig(nodeType);
         const geometry = createGeometryForDetail(nodeConfig.shape, childrenCount, detailLevel);
-        const lambertMaterial = new THREE.MeshLambertMaterial({ color: nodeConfig.color });
-        const basicMaterial = new THREE.MeshBasicMaterial({ color: nodeConfig.color });
-        const mesh = new THREE.Mesh(geometry, lambertMaterial);
-        mesh.userData.lambertMaterial = lambertMaterial;
-        mesh.userData.basicMaterial = basicMaterial;
+        const material = new THREE.MeshLambertMaterial({ color: nodeConfig.color });
+        const mesh = new THREE.Mesh(geometry, material);
         return mesh;
     }
 
@@ -46,7 +57,7 @@ export function useAstVisualization(scene, graph) {
 
         switch (shape) {
             case 'sphere':
-                return new THREE.SphereGeometry(size, Math.max(8, Math.floor(32 * segmentMultiplier)), Math.max(6, Math.floor(32 * segmentMultiplier)));
+                return new THREE.SphereGeometry(size * 0.7, Math.max(8, Math.floor(32 * segmentMultiplier)), Math.max(6, Math.floor(32 * segmentMultiplier)));
             case 'cube':
             case 'box':
                 return new THREE.BoxGeometry(size, size, size);
@@ -56,6 +67,32 @@ export function useAstVisualization(scene, graph) {
                 return new THREE.OctahedronGeometry(size * 1.25, Math.floor(2 * segmentMultiplier));
             case 'icosahedron':
                 return new THREE.IcosahedronGeometry(size * 1.25, Math.floor(2 * segmentMultiplier));
+            case 'capsule':
+                return new THREE.CapsuleGeometry(size * 0.5, size, Math.max(4, Math.floor(16 * segmentMultiplier)), Math.max(8, Math.floor(32 * segmentMultiplier)));
+            case 'cylinder':
+                return new THREE.CylinderGeometry(size * 0.5, size * 0.5, size, Math.max(8, Math.floor(32 * segmentMultiplier)), Math.max(1, Math.floor(4 * segmentMultiplier)));
+            case 'cone':
+                return new THREE.ConeGeometry(size * 0.75, size, Math.max(8, Math.floor(32 * segmentMultiplier)), Math.max(1, Math.floor(4 * segmentMultiplier)));
+            case 'torus':
+                return new THREE.TorusGeometry(size * 0.5, size * 0.25, Math.max(8, Math.floor(16 * segmentMultiplier)), Math.max(6, Math.floor(24 * segmentMultiplier)));
+            case 'dodecahedron':
+                return new THREE.DodecahedronGeometry(size, Math.floor(2 * segmentMultiplier));
+            case 'extrude':
+                const shape = new THREE.Shape();
+                shape.moveTo(0, 0);
+                shape.lineTo(size, 0);
+                shape.lineTo(size, size);
+                shape.lineTo(0, size);
+                shape.lineTo(0, 0);
+                const extrudeSettings = {
+                    steps: Math.max(1, Math.floor(4 * segmentMultiplier)),
+                    depth: size * 0.5,
+                    bevelEnabled: true,
+                    bevelThickness: size * 0.1,
+                    bevelSize: size * 0.05,
+                    bevelSegments: Math.max(1, Math.floor(4 * segmentMultiplier))
+                };
+                return new THREE.ExtrudeGeometry(shape, extrudeSettings);
             default:
                 return new THREE.SphereGeometry(size * 1.25, Math.max(8, Math.floor(32 * segmentMultiplier)), Math.max(6, Math.floor(32 * segmentMultiplier)));
         }
@@ -69,15 +106,17 @@ export function useAstVisualization(scene, graph) {
         let lodObject;
         if (meshPool.get(type).length > 0) {
             lodObject = meshPool.get(type).pop();
+            const nodeConfig = getNodeConfig(type);
             lodObject.levels.forEach(level => {
                 level.object.geometry.dispose();
-                level.object.geometry = createGeometryForDetail(NODE_TYPES[type]?.shape || DEFAULT_NODE_TYPE.shape, childrenCount, getLODDetailLevel(level.distance));
+                level.object.geometry = createGeometryForDetail(nodeConfig.shape, childrenCount, getLODDetailLevel(level.distance));
+                level.object.material.color.setHex(nodeConfig.color);
             });
         } else {
             lodObject = createLODObject(type, childrenCount);
         }
 
-        const nodeConfig = NODE_TYPES[type] || DEFAULT_NODE_TYPE;
+        const nodeConfig = getNodeConfig(type);
         lodObject.userData = {
             originalColor: nodeConfig.color,
             type: type
@@ -92,15 +131,27 @@ export function useAstVisualization(scene, graph) {
         }
 
         const material = new THREE.LineBasicMaterial({
-            color: 0xAAAAAA,
-            transparent: true,
-            opacity: 0.5
+            color: settingsStore.linkColors.normal,
+            lineWidth: 0.1,
         });
         material.depthTest = true;
         material.depthWrite = false;
 
         const geometry = new THREE.BufferGeometry();
         return new THREE.Line(geometry, material);
+    }
+
+    function updateLine(line, source, target) {
+        const geometry = line.geometry;
+        const positions = new Float32Array([
+            source.position.x, source.position.y, source.position.z,
+            target.position.x, target.position.y, target.position.z
+        ]);
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.computeBoundingSphere();
+
+        // Update line color based on the current settings
+        line.material.color.setHex(settingsStore.linkColors.normal);
     }
 
     function updateMesh(lodObject, node) {
@@ -114,14 +165,31 @@ export function useAstVisualization(scene, graph) {
         lodObject.userData = { ...node, type: lodObject.userData.type, originalColor: lodObject.userData.originalColor };
     }
 
-    function updateLine(line, source, target) {
-        const geometry = line.geometry;
-        const positions = new Float32Array([
-            source.position.x, source.position.y, source.position.z,
-            target.position.x, target.position.y, target.position.z
-        ]);
-        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        geometry.computeBoundingSphere();
+    function updateNodeSettings(nodeType) {
+        const nodeSettings = settingsStore.settings[nodeType];
+        if (nodeSettings) {
+            graph.children.forEach(child => {
+                if (child instanceof THREE.LOD && child.userData.type === nodeType) {
+                    updateNodeGeometry(child, nodeSettings.shape, child.userData.children.length);
+                    updateNodeColor(child, nodeSettings.color);
+                }
+            });
+        }
+    }
+
+    function updateNodeGeometry(node, shape, childrenCount) {
+        node.levels.forEach(level => {
+            const oldGeometry = level.object.geometry;
+            level.object.geometry = createGeometryForDetail(shape, childrenCount, getLODDetailLevel(level.distance));
+            oldGeometry.dispose();
+        });
+    }
+
+    function updateNodeColor(node, color) {
+        node.levels.forEach(level => {
+            level.object.material.color.setHex(color);
+        });
+        node.userData.originalColor = color;
     }
 
     function updateVisualization(nodes, links) {
@@ -256,10 +324,11 @@ export function useAstVisualization(scene, graph) {
         graph.updateMatrixWorld(true);
     }
 
-
     return {
         updateVisualization,
         updateVisibility,
+        updateNodeSettings,
+        centerVisualization,
         visibleNodes,
         visibleLinks,
         nodesByType,

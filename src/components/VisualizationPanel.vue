@@ -4,6 +4,11 @@ import * as THREE from 'three';
 import { useThreeJS } from '../composables/useThreeJS';
 import { useNodeInteractions } from '../composables/useNodeInteractions';
 import { useAstVisualization } from '../composables/useAstVisualization';
+import { useAstStore } from '../stores/astStore';
+import { useSettingsStore } from '../stores/settingsStore';
+
+const astStore = useAstStore();
+const settingsStore = useSettingsStore();
 
 const props = defineProps({
   nodes: {
@@ -42,12 +47,16 @@ const {
   updateCamera,
   onCameraControlsStart,
   onCameraControlsEnd,
-  isCameraAnimating
+  updateHighlight,
+  isCameraAnimating,
+  cursorType,
 } = useNodeInteractions(scene, camera, controls, graph, updateInfoPanel, renderer);
 
 const {
   updateVisualization,
   updateVisibility,
+  updateNodeSettings,
+  centerVisualization,
 } = useAstVisualization(scene, graph);
 
 defineExpose({
@@ -102,9 +111,33 @@ function onMouseDown(event) {
 
 function onMouseUp(event) {
   if (event.button === 0) { // Left mouse button
-    canvasContainer.value.style.cursor = 'grab';
+    canvasContainer.value.style.cursor = cursorType.value;
   }
 }
+
+function updateCursor() {
+  if (canvasContainer.value) {
+    canvasContainer.value.style.cursor = cursorType.value;
+  }
+}
+
+
+
+watch(cursorType, updateCursor);
+
+watch(() => settingsStore.updateTrigger, () => {
+  Object.keys(settingsStore.settings).forEach(nodeType => {
+    updateNodeSettings(nodeType);
+    centerVisualization();
+  });
+});
+
+watch(() => settingsStore.linkColors, (newColors, oldColors) => {
+  if (JSON.stringify(newColors) !== JSON.stringify(oldColors)) {
+    updateHighlight();
+    centerVisualization();
+  }
+}, { deep: true });
 
 onMounted(() => {
   if (canvasContainer.value) {

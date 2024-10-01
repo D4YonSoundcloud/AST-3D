@@ -81,6 +81,8 @@ export const useAstStore = defineStore('ast', () => {
 
     const currentNodeData = ref(null)
 
+    const visualizationUpdateTrigger = ref(0);
+
     function setAst(newAst) {
         ast.value = newAst
     }
@@ -121,8 +123,10 @@ export const useAstStore = defineStore('ast', () => {
 
     function setCurrentNodeData(nodeData) {
         currentNodeData.value = nodeData
+    }
 
-        console.log(JSON.stringify(currentNodeData.value))
+    function triggerVisualizationUpdate() {
+        visualizationUpdateTrigger.value += 1;
     }
 
     return {
@@ -134,6 +138,7 @@ export const useAstStore = defineStore('ast', () => {
         visibleNodeTypes,
         currentAstNodeTypes,
         currentNodeData,
+        visualizationUpdateTrigger,
         setAst,
         setNodes,
         setLinks,
@@ -142,6 +147,7 @@ export const useAstStore = defineStore('ast', () => {
         toggleAvailableNodeType,
         toggleVisibleNodeType,
         setCurrentNodeData,
+        triggerVisualizationUpdate,
         ALL_NODE_TYPES,
         DEFAULT_VISIBLE_NODE_TYPES
     }

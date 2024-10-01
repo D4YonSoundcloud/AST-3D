@@ -1,6 +1,12 @@
 <script setup>
-import { ref } from 'vue';
+import {computed, ref, watch} from 'vue';
+import { useSettingsStore } from '../stores/settingsStore';
+import { useAstStore } from '../stores/astStore';
 import NodeTypeIcon from "@/components/NodeTypeIcon.vue";
+
+const settingsStore = useSettingsStore();
+const astStore = useAstStore();
+
 
 const props = defineProps({
   availableNodeTypes: {
@@ -16,6 +22,30 @@ const props = defineProps({
 const emit = defineEmits(['toggleAvailableNodeType']);
 
 const showSettings = ref(false);
+const editingNodeType = ref(null);
+
+const nodeTypes = computed(() => Object.keys(settingsStore.settings));
+const geometryOptions = computed(() => ['sphere', 'cube', 'tetrahedron', 'octahedron', 'icosahedron']);
+
+
+function startEditingNodeType(nodeType) {
+  editingNodeType.value = nodeType;
+}
+
+function updateNodeTypeSetting(nodeType, property, value) {
+  settingsStore.updateNodeTypeSetting(nodeType, property, value);
+  astStore.triggerVisualizationUpdate();
+}
+
+function updateLinkColor(colorType, value) {
+  settingsStore.updateLinkColor(colorType, parseInt(value.slice(1), 16));
+  astStore.triggerVisualizationUpdate();
+}
+
+function resetToDefaults() {
+  settingsStore.resetToDefaults();
+  astStore.triggerVisualizationUpdate();
+}
 
 function toggleSettings() {
   showSettings.value = !showSettings.value;
@@ -23,6 +53,14 @@ function toggleSettings() {
 
 function toggleAvailableNodeType(type) {
   emit('toggleAvailableNodeType', type);
+}
+
+
+function applyTemplate(templateName) {
+  if (templateName) {
+    settingsStore.applyTemplate(templateName);
+    astStore.triggerVisualizationUpdate();
+  }
 }
 </script>
 
@@ -37,6 +75,58 @@ function toggleAvailableNodeType(type) {
     </button>
     <div v-if="showSettings" class="settings-panel">
       <h3>Settings</h3>
+      <div class="node-type-settings">
+        <button @click="resetToDefaults" class="reset-button">Reset to Defaults</button>
+        <select v-model="settingsStore.currentTemplate" @change="applyTemplate(settingsStore.currentTemplate)" class="template-select">
+          <option v-for="template in settingsStore.availableTemplates" :key="template" :value="template">
+            {{ template }}
+          </option>
+        </select>
+        <div v-for="nodeType in nodeTypes" :key="nodeType" class="node-type-setting">
+          <div class="node-type-header" @click="startEditingNodeType(nodeType)">
+            <NodeTypeIcon :type="nodeType"></NodeTypeIcon>
+            <span>{{ nodeType }}</span>
+          </div>
+          <div v-if="editingNodeType === nodeType" class="node-type-editor">
+            <div class="color-picker">
+              <label>Color:</label>
+              <input type="color"
+                     :value="'#' + settingsStore.settings[nodeType].color.toString(16).padStart(6, '0')"
+                     @input="updateNodeTypeSetting(nodeType, 'color', parseInt($event.target.value.slice(1), 16))">
+            </div>
+            <div class="shape-selector">
+              <label>Shape:</label>
+              <select :value="settingsStore.settings[nodeType].shape"
+                      @change="updateNodeTypeSetting(nodeType, 'shape', $event.target.value)">
+                <option v-for="option in geometryOptions" :key="option" :value="option">
+                  {{ option }}
+                </option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="link-color-settings">
+        <h4>Link Colors</h4>
+        <div class="color-picker">
+          <label>Normal:</label>
+          <input type="color"
+                 :value="'#' + settingsStore.linkColors.normal.toString(16).padStart(6, '0')"
+                 @input="updateLinkColor('normal', $event.target.value)">
+        </div>
+        <div class="color-picker">
+          <label>Hover:</label>
+          <input type="color"
+                 :value="'#' + settingsStore.linkColors.hover.toString(16).padStart(6, '0')"
+                 @input="updateLinkColor('hover', $event.target.value)">
+        </div>
+        <div class="color-picker">
+          <label>Selected:</label>
+          <input type="color"
+                 :value="'#' + settingsStore.linkColors.selected.toString(16).padStart(6, '0')"
+                 @input="updateLinkColor('selected', $event.target.value)">
+        </div>
+      </div>
       <h4>Available Node Types</h4>
       <div class="node-type-toggles">
         <div v-for="type in allNodeTypes" :key="type" class="node-type-toggle" @click="toggleAvailableNodeType(type)">
@@ -56,6 +146,30 @@ function toggleAvailableNodeType(type) {
 </template>
 
 <style scoped>
+.link-color-settings {
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  background-color: var(--node-bg);
+  border-radius: 4px;
+}
+
+.link-color-settings h4 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.settings-actions {
+  display: flex;
+  align-items: center;
+}
+
 .settings-container {
   position: absolute;
   top: 0.5rem;
@@ -148,5 +262,152 @@ function toggleAvailableNodeType(type) {
 .node-type-name {
   margin-left: 0.5rem;
   font-size: 0.9rem;
+}
+
+.node-type-settings {
+  max-height: 70vh;
+  overflow-y: auto;
+  margin-bottom: 0.5rem;
+}
+
+.node-type-setting {
+  margin-bottom: 10px;
+}
+
+.node-type-header {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.node-type-editor {
+  margin-top: 10px;
+  padding: 10px;
+  background-color: var(--settings-bg-color);
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+
+.color-picker,
+.shape-selector {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.color-picker label,
+.shape-selector label {
+  flex: 0 0 60px; /* Adjust this width as needed */
+  margin-right: 10px;
+  font-size: 0.8rem;
+}
+
+input[type="color"] {
+  -webkit-appearance: none;
+  flex: 1;
+  height: 30px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background-color: transparent;
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px var(--border-color);
+}
+
+select {
+  font-family: "JetBrains Mono";
+  flex: 1;
+  padding: 5px 25px 5px 10px; /* Increased right padding for the arrow */
+  font-size: 0.8rem;
+  color: var(--text-color);
+  background-color: var(--node-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat;
+  background-position: right 5px top 50%;
+  background-size: 12px auto;
+}
+
+select:hover,
+select:focus {
+  border-color: var(--primary-color);
+}
+
+select option {
+  background-color: var(--node-bg);
+  color: var(--text-color);
+}
+
+/* Adjust the existing styles for consistency */
+.settings-panel {
+  background-color: var(--settings-bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 1rem;
+  min-width: 250px;
+  max-width: 300px;
+}
+
+.node-type-header {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 4px;
+}
+
+.node-type-header:hover {
+  background-color: var(--hover-color);
+}
+
+.node-type-header span {
+  margin-left: 10px;
+  font-size: 0.9rem;
+}
+
+.reset-button {
+  margin-left: 2.5%;
+  width: 95%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border: 1px solid var(--primary-color);
+  background-color: var(--settings-bg-color);
+  color: var(--text-color);
+  font-family: "JetBrains Mono", sans-serif;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+}
+
+.reset-button:hover {
+  border: 1px solid var(--primary-color);
+  background-color: var(--border-color);
+}
+
+.template-select {
+  width: 100%;
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  font-family: 'JetBrains Mono', monospace;
+  background-color: var(--node-bg);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
 }
 </style>
