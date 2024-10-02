@@ -1,6 +1,7 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import {Line2} from "three/addons/lines/Line2.js";
 
 export function useThreeJS(container) {
     const scene = new THREE.Scene();
@@ -93,6 +94,13 @@ export function useThreeJS(container) {
             camera.aspect = container.value.clientWidth / container.value.clientHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(container.value.clientWidth, container.value.clientHeight);
+
+            // Update line material resolution
+            graph.children.forEach(child => {
+                if (child instanceof Line2) {
+                    child.material.resolution.set(container.value.clientWidth, container.value.clientHeight);
+                }
+            });
         }
     }
 

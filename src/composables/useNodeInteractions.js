@@ -4,6 +4,7 @@ import gsap from 'gsap';
 import {LOD} from "three";
 import {Frustum} from "three";
 import { useSettingsStore } from '../stores/settingsStore';
+import {Line2} from "three/addons/lines/Line2.js";
 
 export function useNodeInteractions(scene, camera, controls, graph, updateInfoPanel, renderer) {
     const settingsStore = useSettingsStore();
@@ -17,6 +18,7 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
     const cursorType = ref('grab');
 
     const maxPossibleDepth = ref(0);
+    const currentMaxDepth = ref(0);
 
     const COLORS = {
         DEFAULT: 0xAAAAAA,
@@ -89,7 +91,7 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
         graph.children.forEach(child => {
             if (child instanceof LOD && child.visible) {
                 resetNodeHighlight(child);
-            } else if (child instanceof THREE.Line && child.visible) {
+            } else if (child instanceof Line2 && child.visible) {
                 resetEdgeHighlight(child);
             }
         });
@@ -172,7 +174,7 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
             level.object.material.transparent = false;
             level.object.material.needsUpdate = true;
         });
-        node.scale.setScalar(isPrimary ? 1.15 : 1.1);
+        node.scale.setScalar(isPrimary ? 1.15 : 1);
     }
 
     /**
@@ -183,7 +185,7 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
      */
     function highlightEdge(sourceNode, targetNode, highlightColor) {
         const edge = graph.children.find(child =>
-            child instanceof THREE.Line &&
+            child instanceof Line2 &&
             child.userData.source === sourceNode &&
             child.userData.target === targetNode
         );
@@ -194,16 +196,19 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
     }
 
     function setEdgeProperties(edge, color, opacity, renderOrder) {
-        edge.material.color.setHex(color);
-        edge.material.opacity = opacity;
-        edge.renderOrder = renderOrder;
-        edge.material.transparent = opacity < 1;
-        edge.material.needsUpdate = true;
+        if (edge instanceof Line2) {
+            edge.material.color.setHex(color);
+            edge.material.opacity = opacity;
+            edge.renderOrder = renderOrder;
+            edge.material.transparent = opacity < 1;
+            edge.material.linewidth = opacity === 1 ? 1.5 : 1;
+            edge.material.needsUpdate = true;
+        }
     }
 
     function updateRenderOrder() {
         graph.children.forEach(child => {
-            if (child instanceof THREE.Line && child.visible) {
+            if (child instanceof Line2 && child.visible) {
                 const sourceRenderOrder = child.userData.source.renderOrder || 0;
                 const targetRenderOrder = child.userData.target.renderOrder || 0;
                 child.renderOrder = Math.max(sourceRenderOrder, targetRenderOrder, child.renderOrder);
@@ -212,35 +217,47 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
     }
 
     function makeNonConnectedTransparent(rootNodeId, maxDepth) {
-        if (!rootNodeId) return;
-
         const connectedNodes = new Set();
-        const nodesToProcess = [{id: rootNodeId, depth: 0}];
+        if (rootNodeId !== null && rootNodeId !== undefined) {
+            const nodesToProcess = [{id: rootNodeId, depth: 0}];
 
-        while (nodesToProcess.length > 0) {
-            const {id: currentNodeId, depth} = nodesToProcess.pop();
-            if (connectedNodes.has(currentNodeId) || depth > maxDepth) continue;
+            while (nodesToProcess.length > 0) {
+                const {id: currentNodeId, depth} = nodesToProcess.pop();
+                if (connectedNodes.has(currentNodeId) || depth > maxDepth) continue;
 
-            connectedNodes.add(currentNodeId);
-            if (depth < maxDepth) {
-                const childNodes = getChildNodes(graph.children.find(child => child instanceof LOD && child.userData.id === currentNodeId));
-                nodesToProcess.push(...childNodes.map(node => ({id: node.userData.id, depth: depth + 1})));
+                connectedNodes.add(currentNodeId);
+                if (depth < maxDepth) {
+                    const currentNode = graph.children.find(child => child instanceof LOD && child.userData.id === currentNodeId);
+                    if (currentNode) {
+                        const childNodes = getChildNodes(currentNode);
+                        nodesToProcess.push(...childNodes.map(node => ({id: node.userData.id, depth: depth + 1})));
+                    }
+                }
             }
         }
 
         graph.children.forEach(child => {
             if (child instanceof LOD && child.visible) {
-                if (!connectedNodes.has(child.userData.id)) {
-                    child.levels.forEach(level => {
-                        level.object.material.opacity = settingsStore.nonConnectedOpacity;
-                        level.object.material.transparent = true;
-                        level.object.material.needsUpdate = true;
-                    });
-                }
-            } else if (child instanceof THREE.Line && child.visible) {
-                if (!connectedNodes.has(child.userData.source.userData.id) || !connectedNodes.has(child.userData.target.userData.id)) {
-                    setEdgeProperties(child, settingsStore.linkColors.normal, settingsStore.nonConnectedOpacity, 0);
-                }
+                const isConnected = connectedNodes.has(child.userData.id);
+                const opacity = rootNodeId !== null && rootNodeId !== undefined && !isConnected ?
+                    settingsStore.nonConnectedOpacity : 1;
+
+                child.levels.forEach(level => {
+                    level.object.material.opacity = opacity;
+                    level.object.material.transparent = opacity < 1;
+                    level.object.material.needsUpdate = true;
+                });
+            } else if (child instanceof Line2 && child.visible) {
+                const isConnected = connectedNodes.has(child.userData.source.userData.id) &&
+                    connectedNodes.has(child.userData.target.userData.id);
+                const opacity = rootNodeId !== null && rootNodeId !== undefined && !isConnected ?
+                    settingsStore.nonConnectedOpacity : 1;
+
+                // Only update opacity, not color
+                child.material.opacity = opacity;
+                child.material.transparent = opacity < 1;
+                child.material.linewidth = opacity === 1 ? 2 : 1;
+                child.material.needsUpdate = true;
             }
         });
     }
@@ -299,6 +316,7 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
 
         selectedNode.value = node.userData.id;
         maxPossibleDepth.value = calculateMaxDepth(node);
+        currentMaxDepth.value = calculateMaxDepth(node);
 
         // Adjust current depth if it's above the max possible depth
         if (settingsStore.highlightDepth > maxPossibleDepth.value) {
@@ -376,7 +394,7 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
     function getChildNodes(node) {
         const childNodes = [];
         graph.children.forEach(child => {
-            if (child instanceof THREE.Line &&
+            if (child instanceof Line2 &&
                 child.userData.source === node &&
                 child.userData.relationshipType === 'parent-child') {
                 childNodes.push(child.userData.target);

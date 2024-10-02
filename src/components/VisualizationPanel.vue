@@ -77,10 +77,10 @@ function handleWheel(event) {
   if (canvasContainer.value && canvasContainer.value.contains(event.target) && isShiftPressed.value) {
     event.preventDefault();
     const delta = Math.sign(event.deltaY);
-    const newDepth = Math.max(0, Math.min(5, settingsStore.highlightDepth - delta));
+    const newDepth = Math.max(0, Math.min(maxPossibleDepth.value, settingsStore.highlightDepth + delta));
     settingsStore.updateHighlightDepth(newDepth);
     updateHighlight();
-    centerVisualization();
+    // centerVisualization();
   }
 }
 

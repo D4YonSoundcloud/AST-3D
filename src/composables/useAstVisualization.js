@@ -2,8 +2,16 @@ import * as THREE from 'three';
 import { LOD } from 'three';
 import {ref, shallowRef, watch} from 'vue';
 import { getNodeConfig, NODE_TYPES, DEFAULT_NODE_TYPE } from '../assets/astNodeConfig';
+import { Line2 } from "three/addons/lines/Line2.js";
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { useSettingsStore } from '../stores/settingsStore';
 import { nodeTemplates } from "@/templates/nodeTemplates.js";
+
+const BASE_SPAWN_RANGE = 150;
+const SCOPE_MULTIPLIER = 2;
+const CHILD_SPAWN_RANGE = 150; // Range for spawning children around their parent
+const VERTICAL_SPACING = 125; // Vertical spacing between scope levels
 
 export function useAstVisualization(scene, graph) {
     const settingsStore = useSettingsStore();
@@ -58,7 +66,7 @@ export function useAstVisualization(scene, graph) {
     }
 
     function createGeometryForDetail(shape, childrenCount, detailLevel) {
-        const size = Math.min(2 + childrenCount * 0.5, 10);
+        const size = Math.min(3 + childrenCount * 0.5, 10);
         const segmentMultiplier = detailLevel === 'high' ? 0.5 : detailLevel === 'medium' ? 0.25 : 0.1;
 
         switch (shape) {
@@ -136,39 +144,98 @@ export function useAstVisualization(scene, graph) {
             return linePool.pop();
         }
 
-        const material = new THREE.LineBasicMaterial({
+        const geometry = new LineGeometry();
+        const material = new LineMaterial({
             color: settingsStore.linkColors.normal,
-            lineWidth: 0.1,
+            linewidth: 1, // in pixels
+            vertexColors: false,
+            dashed: false,
+            alphaToCoverage: true,
         });
-        material.depthTest = true;
-        material.depthWrite = false;
 
-        const geometry = new THREE.BufferGeometry();
-        return new THREE.Line(geometry, material);
+        // Initialize the geometry with dummy positions
+        geometry.setPositions(new Float32Array(6)); // 2 points * 3 coordinates each
+
+        const line = new Line2(geometry, material);
+        line.computeLineDistances();
+
+        return line;
     }
 
     function updateLine(line, source, target) {
-        const geometry = line.geometry;
+        if (!line || !line.geometry || !source || !target) {
+            console.error('Invalid line, source, or target:', { line, source, target });
+            return;
+        }
+
+        // Get the world positions of the source and target nodes
+        const sourceWorldPos = new THREE.Vector3();
+        const targetWorldPos = new THREE.Vector3();
+        source.getWorldPosition(sourceWorldPos);
+        target.getWorldPosition(targetWorldPos);
+
         const positions = new Float32Array([
-            source.position.x, source.position.y, source.position.z,
-            target.position.x, target.position.y, target.position.z
+            sourceWorldPos.x, sourceWorldPos.y, sourceWorldPos.z,
+            targetWorldPos.x, targetWorldPos.y, targetWorldPos.z
         ]);
-        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        geometry.computeBoundingSphere();
+
+        try {
+            line.geometry.setPositions(positions);
+            line.computeLineDistances();
+        } catch (error) {
+            console.error('Error updating line geometry:', error);
+        }
 
         // Update line color based on the current settings
         line.material.color.setHex(settingsStore.linkColors.normal);
+
+        // Ensure the material is using the correct resolution
+        line.material.resolution.set(window.innerWidth, window.innerHeight);
     }
 
+
     function updateMesh(lodObject, node) {
-        lodObject.position.set(
-            (Math.random() - 0.5) * 225,
-            node.type === 'Program' ?
-                -node.scopeLevel * 100 + Math.random() * 5 + (5 + (node.children.length * 1.5)) :
-                -node.scopeLevel * 100 + Math.random() * 5 + (5 + (node.children.length * 3)),
-            (Math.random() - 0.5) * 225
-        );
-        lodObject.userData = { ...node, type: lodObject.userData.type, originalColor: lodObject.userData.originalColor };
+        let x, y, z;
+
+        if (node.type === 'Program') {
+            // Position the root node at the center
+            x = 0;
+            y = 0;
+            z = 0;
+        } else {
+            const scopeMultiplier = Math.pow(SCOPE_MULTIPLIER, node.scopeLevel);
+            const spawnRange = BASE_SPAWN_RANGE * scopeMultiplier;
+
+            const randomAngle = Math.random() * Math.PI * 2;
+            const randomRadius = Math.random() * spawnRange;
+
+            x = Math.cos(randomAngle) * randomRadius;
+            z = Math.sin(randomAngle) * randomRadius;
+            y = -node.scopeLevel * VERTICAL_SPACING;
+
+            // If the node has a parent, position it relative to the parent
+            if (node.parent !== undefined) {
+                const parentNode = graph.children.find(child => child.userData.id === node.parent);
+                if (parentNode) {
+                    const childAngle = Math.random() * Math.PI * 2;
+                    const childRadius = Math.random() * CHILD_SPAWN_RANGE;
+
+                    x = parentNode.position.x + Math.cos(childAngle) * childRadius;
+                    z = parentNode.position.z + Math.sin(childAngle) * childRadius;
+                }
+            }
+        }
+
+        // Adjust vertical position based on the number of children
+        y += 5 + node.children.length * (node.type === 'Program' ? 1.5 : 3);
+
+        lodObject.position.set(x, y, z);
+
+        lodObject.userData = {
+            ...node,
+            type: lodObject.userData.type,
+            originalColor: lodObject.userData.originalColor
+        };
     }
 
     function updateNodeSettings(nodeType) {
@@ -217,7 +284,7 @@ export function useAstVisualization(scene, graph) {
         // Create or update nodes
         nodes.forEach(node => {
             const lodObject = getOrCreateMesh(node.type, node.children.length);
-            updateMesh(lodObject, node);
+            updateMesh(lodObject, node, graph);
             if (!nodesByType.value.has(node.type)) {
                 nodesByType.value.set(node.type, new Set());
             }
@@ -235,7 +302,7 @@ export function useAstVisualization(scene, graph) {
                 updateLine(line, sourceLOD, targetLOD);
                 line.userData.source = sourceLOD;
                 line.userData.target = targetLOD;
-                line.userData.relationshipType = link.type || 'other'; // Add relationship type
+                line.userData.relationshipType = link.type || 'other';
 
                 const sourceType = sourceLOD.userData.type;
                 const targetType = targetLOD.userData.type;
@@ -252,7 +319,7 @@ export function useAstVisualization(scene, graph) {
                 graph.add(line);
             }
         });
-        
+
         centerVisualization();
     }
 
@@ -265,7 +332,7 @@ export function useAstVisualization(scene, graph) {
         });
 
         graph.children.forEach(child => {
-            if (child instanceof THREE.Line) {
+            if (child instanceof Line2) {
                 const sourceVisible = child.userData.source.visible;
                 const targetVisible = child.userData.target.visible;
                 child.visible = sourceVisible && targetVisible;
@@ -296,10 +363,10 @@ export function useAstVisualization(scene, graph) {
     function centerVisualization() {
         if (graph.children.length === 0) return;
 
-        // Calculate the bounding box of all nodes
+        // Calculate the bounding box of all nodes and lines
         const boundingBox = new THREE.Box3();
         graph.children.forEach(child => {
-            if (child instanceof THREE.LOD) {
+            if (child instanceof THREE.LOD || child instanceof Line2) {
                 boundingBox.expandByObject(child);
             }
         });
@@ -307,23 +374,20 @@ export function useAstVisualization(scene, graph) {
         const center = new THREE.Vector3();
         boundingBox.getCenter(center);
 
-        // Move all nodes
+        // Move all nodes and update lines
         graph.children.forEach(child => {
             if (child instanceof THREE.LOD) {
                 child.position.sub(center);
-            }
-        });
-
-        // Update all links
-        graph.children.forEach(child => {
-            if (child instanceof THREE.Line) {
-                const positions = child.geometry.attributes.position.array;
-                for (let i = 0; i < positions.length; i += 3) {
-                    positions[i] -= center.x;
-                    positions[i + 1] -= center.y;
-                    positions[i + 2] -= center.z;
-                }
-                child.geometry.attributes.position.needsUpdate = true;
+            } else if (child instanceof Line2) {
+                // Update line positions
+                const sourcePos = child.userData.source.position;
+                const targetPos = child.userData.target.position;
+                const positions = new Float32Array([
+                    sourcePos.x - center.x, sourcePos.y - center.y, sourcePos.z - center.z,
+                    targetPos.x - center.x, targetPos.y - center.y, targetPos.z - center.z
+                ]);
+                child.geometry.setPositions(positions);
+                child.computeLineDistances();
             }
         });
 
