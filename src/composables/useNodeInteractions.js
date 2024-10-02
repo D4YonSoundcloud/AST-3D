@@ -16,6 +16,8 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
     const isCameraAnimating = ref(false);
     const cursorType = ref('grab');
 
+    const maxPossibleDepth = ref(0);
+
     const COLORS = {
         DEFAULT: 0xAAAAAA,
         SELECTED: 0x00FF00,
@@ -296,6 +298,13 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
         });
 
         selectedNode.value = node.userData.id;
+        maxPossibleDepth.value = calculateMaxDepth(node);
+
+        // Adjust current depth if it's above the max possible depth
+        if (settingsStore.highlightDepth > maxPossibleDepth.value) {
+            settingsStore.updateHighlightDepth(maxPossibleDepth.value);
+        }
+
         updateHighlight();
     }
 
@@ -324,7 +333,16 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
 
         selectedNode.value = null;
         hoveredNode.value = null;
+        maxPossibleDepth.value = 0;
         updateHighlight();
+    }
+
+    function calculateMaxDepth(node, currentDepth = 0) {
+        const childNodes = getChildNodes(node);
+        if (childNodes.length === 0) {
+            return currentDepth;
+        }
+        return Math.max(...childNodes.map(child => calculateMaxDepth(child, currentDepth + 1)));
     }
 
     function onCameraControlsStart() {
@@ -378,6 +396,7 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
     return {
         hoveredNode,
         selectedNode,
+        maxPossibleDepth,
         onMouseMove,
         onNodeLeftClick,
         onNodeRightClick,

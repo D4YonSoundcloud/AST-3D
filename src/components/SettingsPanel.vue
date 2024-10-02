@@ -67,6 +67,8 @@ function applyTemplate(templateName) {
     astStore.triggerVisualizationUpdate();
   }
 }
+
+
 </script>
 
 <template>

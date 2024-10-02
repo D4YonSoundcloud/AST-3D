@@ -47,14 +47,18 @@ const {
 const {
   hoveredNode,
   selectedNode,
+  maxPossibleDepth,
   onMouseMove,
+  onNodeLeftClick,
+  onNodeRightClick,
+  updateHighlight,
   updateCamera,
   onCameraControlsStart,
   onCameraControlsEnd,
-  updateHighlight,
   isCameraAnimating,
   cursorType,
 } = useNodeInteractions(scene, camera, controls, graph, updateInfoPanel, renderer);
+
 
 const {
   updateVisualization,
@@ -209,7 +213,7 @@ watch(() => props.visibleNodeTypes, () => {
 
 <template>
   <div ref="canvasContainer" class="canvas-container">
-    <VisualizationControls />
+    <VisualizationControls :maxPossibleDepth="maxPossibleDepth"/>
   </div>
 </template>
 

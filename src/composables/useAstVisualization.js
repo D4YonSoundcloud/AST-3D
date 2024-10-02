@@ -3,6 +3,7 @@ import { LOD } from 'three';
 import {ref, shallowRef, watch} from 'vue';
 import { getNodeConfig, NODE_TYPES, DEFAULT_NODE_TYPE } from '../assets/astNodeConfig';
 import { useSettingsStore } from '../stores/settingsStore';
+import { nodeTemplates } from "@/templates/nodeTemplates.js";
 
 export function useAstVisualization(scene, graph) {
     const settingsStore = useSettingsStore();
@@ -22,11 +23,16 @@ export function useAstVisualization(scene, graph) {
     ]);
 
     function getNodeConfig(type) {
-        // Add a check to ensure the type exists in the settings
         if (settingsStore.settings[type]) {
             return settingsStore.settings[type];
         }
-        // If the specific type doesn't exist, return a default configuration
+        // If the specific type doesn't exist in current settings, check the default template
+        if (nodeTemplates.default.nodeTypes[type]) {
+            settingsStore.updateNodeTypeSetting(type, 'color', nodeTemplates.default.nodeTypes[type].color);
+            settingsStore.updateNodeTypeSetting(type, 'shape', nodeTemplates.default.nodeTypes[type].shape);
+            return nodeTemplates.default.nodeTypes[type];
+        }
+        // If still not found, return a default configuration
         console.warn(`No configuration found for node type: ${type}. Using default.`);
         return { color: 0x808080, shape: 'sphere' };
     }

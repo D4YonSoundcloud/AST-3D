@@ -16,18 +16,26 @@ export const useSettingsStore = defineStore('settings', () => {
 
     const availableTemplates = computed(() => Object.keys(nodeTemplates));
 
-    const animationDuration = ref(0.5); // in seconds
 
     function saveSettings() {
         localStorage.setItem('astVisualizerSettings', JSON.stringify({
             nodeTypes: settings.value,
             linkColors: linkColors.value,
             highlightDepth: highlightDepth.value,
-            nonConnectedOpacity: nonConnectedOpacity.value,
-            animationDuration: animationDuration.value
+            nonConnectedOpacity: nonConnectedOpacity.value
         }));
         updateTrigger.value += 1;
     }
+
+    function loadSettings() {
+        const savedSettings = JSON.parse(localStorage.getItem('astVisualizerSettings'));
+        if (savedSettings) {
+            return savedSettings.nodeTypes || nodeTemplates.default.nodeTypes;
+        }
+        return nodeTemplates.default.nodeTypes;
+    }
+
+
 
     function resetToDefaults() {
         settings.value = JSON.parse(JSON.stringify(nodeTemplates.default.nodeTypes));
@@ -38,7 +46,6 @@ export const useSettingsStore = defineStore('settings', () => {
         };
         highlightDepth.value = 1;
         nonConnectedOpacity.value = 0.2;
-        animationDuration.value = 0.5;
         currentTemplate.value = 'default';
         saveSettings();
     }
@@ -49,6 +56,9 @@ export const useSettingsStore = defineStore('settings', () => {
     }
 
     function updateNodeTypeSetting(nodeType, property, value) {
+        if (!settings.value[nodeType]) {
+            settings.value[nodeType] = { ...nodeTemplates.default.nodeTypes[nodeType] };
+        }
         settings.value[nodeType][property] = value;
         saveSettings();
     }
@@ -84,7 +94,6 @@ export const useSettingsStore = defineStore('settings', () => {
         updateTrigger,
         currentTemplate,
         availableTemplates,
-        animationDuration,
         saveSettings,
         resetToDefaults,
         updateNodeTypeSetting,
@@ -92,6 +101,5 @@ export const useSettingsStore = defineStore('settings', () => {
         updateHighlightDepth,
         updateNonConnectedOpacity,
         applyTemplate,
-        updateAnimationDuration,
     };
 });

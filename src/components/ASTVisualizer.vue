@@ -51,6 +51,11 @@ function handleToggleAvailableNodeType(type) {
 
 watch(visibleNodeTypes, () => {}, { deep: true })
 
+
+onMounted(() => {
+  settingsStore.resetToDefaults();
+  astStore.triggerVisualizationUpdate();
+})
 // Utility functions
 function debounce(func, wait) {
   let timeout

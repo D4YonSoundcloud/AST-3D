@@ -1,11 +1,24 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { useSettingsStore } from '../stores/settingsStore';
+import { storeToRefs } from 'pinia';
 
 const settingsStore = useSettingsStore();
+const { highlightDepth } = storeToRefs(settingsStore);
+
+const props = defineProps({
+  maxPossibleDepth: {
+    type: Number,
+    default: 0
+  }
+});
 
 const localHighlightDepth = ref(settingsStore.highlightDepth);
 const localNonConnectedOpacity = ref(settingsStore.nonConnectedOpacity);
+
+const isMaxDepth = computed(() => {
+  return props.maxPossibleDepth > 0 && localHighlightDepth.value >= props.maxPossibleDepth;
+});
 
 function updateHighlightDepth(event) {
   const newDepth = parseInt(event.target.value);
@@ -24,19 +37,23 @@ watch(() => settingsStore.highlightDepth, (newDepth) => {
 watch(() => settingsStore.nonConnectedOpacity, (newOpacity) => {
   localNonConnectedOpacity.value = newOpacity;
 });
+
 </script>
 
 <template>
   <div class="visualization-controls">
     <div class="control-group">
-      <label for="depth-level">Depth Level:</label>
+      <label for="depth-level">
+        Depth Level: {{ isMaxDepth ? '[MAX]' : '' }}
+      </label>
       <select
           id="depth-level"
-          v-model="localHighlightDepth"
           :value="localHighlightDepth"
           @change="updateHighlightDepth"
       >
-        <option v-for="i in 6" :key="i-1" :value="i-1">{{ i-1 }}</option>
+        <option v-for="i in (props.maxPossibleDepth > 0 ? props.maxPossibleDepth + 1 : 6)" :key="i-1" :value="i-1">
+          {{ i-1 }}
+        </option>
       </select>
     </div>
     <div class="control-group">
