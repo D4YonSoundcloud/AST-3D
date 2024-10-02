@@ -83,61 +83,111 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
         const hasSelectedNode = selectedNode.value !== null;
         const hasHoveredNode = hoveredNode.value !== null;
 
+        // Reset all nodes and edges
         graph.children.forEach(child => {
             if (child instanceof LOD && child.visible) {
-                updateNodeHighlight(child, hasSelectedNode, hasHoveredNode);
+                resetNodeHighlight(child);
             } else if (child instanceof THREE.Line && child.visible) {
-                updateEdgeHighlight(child, hasSelectedNode, hasHoveredNode);
+                resetEdgeHighlight(child);
             }
         });
+
+        // Highlight nodes and edges based on depth
+        if (hasSelectedNode) {
+            highlightNodeAndChildren(selectedNode.value, settingsStore.highlightDepth);
+        }
+        if (hasHoveredNode && hoveredNode.value.userData.id !== selectedNode.value) {
+            highlightNodeAndChildren(hoveredNode.value.userData.id, settingsStore.highlightDepth);
+        }
+
+        // Make non-connected nodes and edges transparent
+        makeNonConnectedTransparent(
+            hasSelectedNode ? selectedNode.value : (hasHoveredNode ? hoveredNode.value.userData.id : null),
+            settingsStore.highlightDepth
+        );
 
         updateRenderOrder();
         renderer.render(scene, camera);
     }
 
-    function updateNodeHighlight(node, hasSelectedNode, hasHoveredNode) {
-        const isSelected = node.userData.id === selectedNode.value;
-        const isHovered = node === hoveredNode.value;
-        const isConnectedToSelected = hasSelectedNode && isConnectedTo(node, selectedNode.value);
-        const isConnectedToHovered = hasHoveredNode && isConnectedTo(node, hoveredNode.value.userData.id);
-
+    function resetNodeHighlight(node) {
         const baseColor = new THREE.Color(node.userData.originalColor);
-
         node.levels.forEach(level => {
             level.object.material.color.set(baseColor);
-            level.object.material.emissive.setHex(0x000000);
-        });
-
-        node.scale.setScalar(isSelected || isHovered ? 1.15 : 1);
-
-        const opacity = isSelected || isConnectedToSelected || isHovered || isConnectedToHovered || !hasSelectedNode ? 1 : 0.2;
-
-        node.levels.forEach(level => {
-            level.object.material.opacity = opacity;
-            level.object.material.transparent = opacity < 1;
+            level.object.material.emissive.setHex(baseColor);
+            level.object.material.opacity = 1;
+            level.object.material.transparent = true;
             level.object.material.needsUpdate = true;
         });
+        node.scale.setScalar(1);
+    }
 
-        if (isConnectedToSelected && !isSelected) {
-            node.levels.forEach(level => {
-                level.object.material.emissive.setHex(0x444444);
+    function resetEdgeHighlight(edge) {
+        setEdgeProperties(edge, settingsStore.linkColors.normal, 1, 0);
+    }
+
+    /**
+     * Highlights a node and its children up to the specified depth
+     * @param {string} nodeId - The ID of the node to highlight
+     * @param {number} maxDepth - The maximum depth to highlight
+     * @param {number} currentDepth - The current depth in the recursion
+     */
+    function highlightNodeAndChildren(nodeId, maxDepth, currentDepth = 0) {
+        const node = graph.children.find(child => child instanceof LOD && child.userData.id === nodeId);
+        if (!node) return;
+
+        const highlightColor = calculateHighlightColor(currentDepth, maxDepth);
+        highlightNode(node, currentDepth === 0, highlightColor);
+
+        if (currentDepth < maxDepth) {
+            const childNodes = getChildNodes(node);
+            childNodes.forEach(childNode => {
+                highlightEdge(node, childNode, highlightColor);
+                highlightNodeAndChildren(childNode.userData.id, maxDepth, currentDepth + 1);
             });
         }
     }
 
-    function updateEdgeHighlight(edge, hasSelectedNode, hasHoveredNode) {
-        const isConnectedToSelected = hasSelectedNode && isConnectedTo(edge, selectedNode.value);
-        const isConnectedToHovered = hasHoveredNode && isConnectedTo(edge, hoveredNode.value.userData.id);
+    /**
+     * Calculates the highlight color for a given depth
+     * @param {number} currentDepth - The current depth in the tree
+     * @param {number} maxDepth - The maximum depth set by the user
+     * @returns {THREE.Color} The calculated highlight color
+     */
+    function calculateHighlightColor(currentDepth, maxDepth) {
+        const baseColor = new THREE.Color(settingsStore.linkColors.hover);
+        const darknessFactor = 1 - (currentDepth / maxDepth) * 0.99; // Darken up to 50%
+        return baseColor.multiplyScalar(darknessFactor);
+    }
 
-        if (isConnectedToSelected) {
-            setEdgeProperties(edge, settingsStore.linkColors.selected, 1, 2);
-        } else if (isConnectedToHovered) {
-            setEdgeProperties(edge, hasSelectedNode ? settingsStore.linkColors.hover : settingsStore.linkColors.hover, 1, 1);
-        } else {
-            setEdgeProperties(edge,
-                edge.userData.type === 'dependency' ? 0x989898 :
-                    edge.userData.sourceType === 'Program' ? 0x282828 : settingsStore.linkColors.normal,
-                hasSelectedNode ? 0.2 : 1, 0);
+
+    function highlightNode(node, isPrimary, highlightColor) {
+        const baseColor = new THREE.Color(node.userData.originalColor);
+        node.levels.forEach(level => {
+            level.object.material.color.set(baseColor);
+            // level.object.material.emissive.set(baseColor);
+            level.object.material.opacity = 1;
+            level.object.material.transparent = false;
+            level.object.material.needsUpdate = true;
+        });
+        node.scale.setScalar(isPrimary ? 1.15 : 1.1);
+    }
+
+    /**
+     * Highlights an edge between two nodes
+     * @param {THREE.Object3D} sourceNode - The source node of the edge
+     * @param {THREE.Object3D} targetNode - The target node of the edge
+     * @param {THREE.Color} highlightColor - The color to use for highlighting
+     */
+    function highlightEdge(sourceNode, targetNode, highlightColor) {
+        const edge = graph.children.find(child =>
+            child instanceof THREE.Line &&
+            child.userData.source === sourceNode &&
+            child.userData.target === targetNode
+        );
+
+        if (edge) {
+            setEdgeProperties(edge, highlightColor.getHex(), 1, 1);
         }
     }
 
@@ -147,11 +197,6 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
         edge.renderOrder = renderOrder;
         edge.material.transparent = opacity < 1;
         edge.material.needsUpdate = true;
-    }
-
-    function isConnectedTo(object, nodeId) {
-        return (object.userData.source && object.userData.source.userData.id === nodeId) ||
-            (object.userData.target && object.userData.target.userData.id === nodeId);
     }
 
     function updateRenderOrder() {
@@ -164,6 +209,40 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
         });
     }
 
+    function makeNonConnectedTransparent(rootNodeId, maxDepth) {
+        if (!rootNodeId) return;
+
+        const connectedNodes = new Set();
+        const nodesToProcess = [{id: rootNodeId, depth: 0}];
+
+        while (nodesToProcess.length > 0) {
+            const {id: currentNodeId, depth} = nodesToProcess.pop();
+            if (connectedNodes.has(currentNodeId) || depth > maxDepth) continue;
+
+            connectedNodes.add(currentNodeId);
+            if (depth < maxDepth) {
+                const childNodes = getChildNodes(graph.children.find(child => child instanceof LOD && child.userData.id === currentNodeId));
+                nodesToProcess.push(...childNodes.map(node => ({id: node.userData.id, depth: depth + 1})));
+            }
+        }
+
+        graph.children.forEach(child => {
+            if (child instanceof LOD && child.visible) {
+                if (!connectedNodes.has(child.userData.id)) {
+                    child.levels.forEach(level => {
+                        level.object.material.opacity = settingsStore.nonConnectedOpacity;
+                        level.object.material.transparent = true;
+                        level.object.material.needsUpdate = true;
+                    });
+                }
+            } else if (child instanceof THREE.Line && child.visible) {
+                if (!connectedNodes.has(child.userData.source.userData.id) || !connectedNodes.has(child.userData.target.userData.id)) {
+                    setEdgeProperties(child, settingsStore.linkColors.normal, settingsStore.nonConnectedOpacity, 0);
+                }
+            }
+        });
+    }
+
     function onNodeLeftClick(node) {
         if (isCameraAnimating.value) return;
 
@@ -172,7 +251,7 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
             originalControlsTarget.value = controls.value.target.clone();
         }
 
-        const connectedNodes = getConnectedNodes(node);
+        const connectedNodes = getChildNodes(node);
         const boundingBox = new THREE.Box3();
 
         connectedNodes.forEach(connectedNode => {
@@ -231,7 +310,6 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
                 onUpdate: () => camera.updateProjectionMatrix(),
                 onComplete: () => {
                     isCameraAnimating.value = false;
-                    updateHighlight();
                 },
             });
 
@@ -277,15 +355,16 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
         return nodes.filter(node => isObjectVisible(camera, node)).length;
     }
 
-    function getConnectedNodes(node) {
-        const connectedNodes = new Set();
+    function getChildNodes(node) {
+        const childNodes = [];
         graph.children.forEach(child => {
             if (child instanceof THREE.Line &&
-                (child.userData.source === node || child.userData.target === node)) {
-                connectedNodes.add(child.userData.source === node ? child.userData.target : child.userData.source);
+                child.userData.source === node &&
+                child.userData.relationshipType === 'parent-child') {
+                childNodes.push(child.userData.target);
             }
         });
-        return Array.from(connectedNodes);
+        return childNodes;
     }
 
 

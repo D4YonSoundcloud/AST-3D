@@ -55,6 +55,11 @@ function toggleAvailableNodeType(type) {
   emit('toggleAvailableNodeType', type);
 }
 
+function updateHighlightDepth(event) {
+  const depth = parseInt(event.target.value);
+  settingsStore.updateHighlightDepth(depth);
+  astStore.triggerVisualizationUpdate();
+}
 
 function applyTemplate(templateName) {
   if (templateName) {
@@ -106,6 +111,18 @@ function applyTemplate(templateName) {
           </div>
         </div>
       </div>
+      <div class="highlight-depth-setting">
+        <h4>Highlight Depth</h4>
+        <input
+            type="number"
+            :value="settingsStore.highlightDepth"
+            @input="updateHighlightDepth"
+            min="0"
+            max="5"
+            step="1"
+        >
+        <span class="depth-description">{{ settingsStore.highlightDepth === 0 ? 'Node only' : `Up to ${settingsStore.highlightDepth} level${settingsStore.highlightDepth > 1 ? 's' : ''}` }}</span>
+      </div>
       <div class="link-color-settings">
         <h4>Link Colors</h4>
         <div class="color-picker">
@@ -146,6 +163,29 @@ function applyTemplate(templateName) {
 </template>
 
 <style scoped>
+.highlight-depth-setting {
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  background-color: var(--node-bg);
+  border-radius: 4px;
+}
+
+.highlight-depth-setting h4 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.highlight-depth-setting input {
+  width: 50px;
+  padding: 0.25rem;
+  margin-right: 0.5rem;
+}
+
+.depth-description {
+  font-size: 0.9rem;
+  color: var(--text-color);
+}
+
 .link-color-settings {
   margin-bottom: 1rem;
   padding: 0.5rem;

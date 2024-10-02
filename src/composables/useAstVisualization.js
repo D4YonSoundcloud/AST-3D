@@ -229,6 +229,7 @@ export function useAstVisualization(scene, graph) {
                 updateLine(line, sourceLOD, targetLOD);
                 line.userData.source = sourceLOD;
                 line.userData.target = targetLOD;
+                line.userData.relationshipType = link.type || 'other'; // Add relationship type
 
                 const sourceType = sourceLOD.userData.type;
                 const targetType = targetLOD.userData.type;

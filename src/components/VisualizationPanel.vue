@@ -6,6 +6,7 @@ import { useNodeInteractions } from '../composables/useNodeInteractions';
 import { useAstVisualization } from '../composables/useAstVisualization';
 import { useAstStore } from '../stores/astStore';
 import { useSettingsStore } from '../stores/settingsStore';
+import VisualizationControls from './VisualizationControls.vue';
 
 const astStore = useAstStore();
 const settingsStore = useSettingsStore();
@@ -38,6 +39,9 @@ const {
   handleResize,
   startRenderLoop,
   stopRenderLoop,
+  toggleLights,
+  lightsOn,
+  isShiftPressed,
 } = useThreeJS(canvasContainer);
 
 const {
@@ -64,6 +68,17 @@ defineExpose({
     handleResize();
   }
 });
+
+function handleWheel(event) {
+  if (canvasContainer.value && canvasContainer.value.contains(event.target) && isShiftPressed.value) {
+    event.preventDefault();
+    const delta = Math.sign(event.deltaY);
+    const newDepth = Math.max(0, Math.min(5, settingsStore.highlightDepth - delta));
+    settingsStore.updateHighlightDepth(newDepth);
+    updateHighlight();
+    centerVisualization();
+  }
+}
 
 function updateInfoPanel(nodeData) {
   if (!isCameraAnimating.value) {
@@ -96,6 +111,16 @@ function updatePanelVisualization() {
   camera.updateProjectionMatrix();
 
   controls.maxDistance = cameraZ * 10;
+  controls.value.enableKeys = false;
+  controls.value.mouseButtons = {
+    LEFT: THREE.MOUSE.ROTATE,
+    MIDDLE: THREE.MOUSE.DOLLY,
+    RIGHT: THREE.MOUSE.PAN
+  };
+  controls.value.touches = {
+    ONE: THREE.TOUCH.ROTATE,
+    TWO: THREE.TOUCH.DOLLY_PAN
+  };
   controls.update();
 
   nextTick(() => {
@@ -128,6 +153,7 @@ watch(cursorType, updateCursor);
 watch(() => settingsStore.updateTrigger, () => {
   Object.keys(settingsStore.settings).forEach(nodeType => {
     updateNodeSettings(nodeType);
+    updateHighlight();
     centerVisualization();
   });
 });
@@ -153,6 +179,8 @@ onMounted(() => {
   canvasContainer.value.addEventListener('mousedown', onMouseDown);
   window.addEventListener('mouseup', onMouseUp);
 
+  window.addEventListener('wheel', handleWheel, { passive: false });
+
   updatePanelVisualization()
 });
 
@@ -165,6 +193,7 @@ onUnmounted(() => {
 
   canvasContainer.value.removeEventListener('mousedown', onMouseDown);
   window.removeEventListener('mouseup', onMouseUp);
+  window.removeEventListener('wheel', handleWheel);
 });
 
 watch(() => props.nodes, (newNodes) => {
@@ -179,7 +208,9 @@ watch(() => props.visibleNodeTypes, () => {
 </script>
 
 <template>
-  <div ref="canvasContainer" class="canvas-container"></div>
+  <div ref="canvasContainer" class="canvas-container">
+    <VisualizationControls />
+  </div>
 </template>
 
 <style scoped>

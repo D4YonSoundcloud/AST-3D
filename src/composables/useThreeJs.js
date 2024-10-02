@@ -17,6 +17,7 @@ export function useThreeJS(container) {
     const pointLight2 = new THREE.PointLight(0x00ff0a, 0.8);
 
     const lightsOn = ref(true);
+    const isShiftPressed = ref(false);
 
     function initVisualization() {
         camera.position.set(200, 200, 300);
@@ -42,6 +43,28 @@ export function useThreeJS(container) {
             scene.add(ambientLight);
             scene.add(pointLight);
             scene.add(pointLight2);
+        }
+
+        // Add event listeners for keydown and keyup
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+    }
+
+    function handleKeyDown(event) {
+        if (event.key === 'Shift') {
+            isShiftPressed.value = true;
+            if (controls.value) {
+                controls.value.enableZoom = false;
+            }
+        }
+    }
+
+    function handleKeyUp(event) {
+        if (event.key === 'Shift') {
+            isShiftPressed.value = false;
+            if (controls.value) {
+                controls.value.enableZoom = true;
+            }
         }
     }
 
@@ -117,5 +140,6 @@ export function useThreeJS(container) {
         stopRenderLoop,
         toggleLights,
         lightsOn,
+        isShiftPressed,
     };
 }
