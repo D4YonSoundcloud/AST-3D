@@ -147,7 +147,7 @@ export function useAstVisualization(scene, graph) {
         const geometry = new LineGeometry();
         const material = new LineMaterial({
             color: settingsStore.linkColors.normal,
-            linewidth: 1, // in pixels
+            linewidth: 1.5, // in pixels
             vertexColors: false,
             dashed: false,
             alphaToCoverage: true,
@@ -167,6 +167,10 @@ export function useAstVisualization(scene, graph) {
             console.error('Invalid line, source, or target:', { line, source, target });
             return;
         }
+
+        // Ensure the world matrices are up-to-date
+        source.updateMatrixWorld(true);
+        target.updateMatrixWorld(true);
 
         // Get the world positions of the source and target nodes
         const sourceWorldPos = new THREE.Vector3();
@@ -266,6 +270,7 @@ export function useAstVisualization(scene, graph) {
     }
 
     function updateVisualization(nodes, links) {
+        console.log('calling updateVisualization')
         // Clear existing collections
         nodesByType.value = new Map();
         linksByType.value = new Map();
@@ -292,38 +297,46 @@ export function useAstVisualization(scene, graph) {
             graph.add(lodObject);
         });
 
+        graph.updateMatrixWorld(true);
+
         // Create or update links
-        links.forEach(link => {
-            const sourceLOD = graph.children.find(child => child.userData.id === link.source);
-            const targetLOD = graph.children.find(child => child.userData.id === link.target);
+        setTimeout(() => {
+            links.forEach(link => {
+                const sourceLOD = graph.children.find(child => child.userData.id === link.source);
+                const targetLOD = graph.children.find(child => child.userData.id === link.target);
 
-            if (sourceLOD && targetLOD) {
-                const line = getOrCreateLine();
-                updateLine(line, sourceLOD, targetLOD);
-                line.userData.source = sourceLOD;
-                line.userData.target = targetLOD;
-                line.userData.relationshipType = link.type || 'other';
+                if (sourceLOD && targetLOD) {
+                    const line = getOrCreateLine();
+                    updateLine(line, sourceLOD, targetLOD);
+                    line.userData.source = sourceLOD;
+                    line.userData.target = targetLOD;
+                    line.userData.relationshipType = link.type || 'other';
 
-                const sourceType = sourceLOD.userData.type;
-                const targetType = targetLOD.userData.type;
+                    // Set initial visibility based on source and target visibility
+                    line.visible = sourceLOD.visible && targetLOD.visible;
 
-                if (!linksByType.value.has(sourceType)) {
-                    linksByType.value.set(sourceType, new Set());
+                    const sourceType = sourceLOD.userData.type;
+                    const targetType = targetLOD.userData.type;
+
+                    if (!linksByType.value.has(sourceType)) {
+                        linksByType.value.set(sourceType, new Set());
+                    }
+                    if (!linksByType.value.has(targetType)) {
+                        linksByType.value.set(targetType, new Set());
+                    }
+                    linksByType.value.get(sourceType).add(line);
+                    linksByType.value.get(targetType).add(line);
+
+                    graph.add(line);
                 }
-                if (!linksByType.value.has(targetType)) {
-                    linksByType.value.set(targetType, new Set());
-                }
-                linksByType.value.get(sourceType).add(line);
-                linksByType.value.get(targetType).add(line);
+            });
 
-                graph.add(line);
-            }
-        });
-
-        centerVisualization();
+            centerVisualization();
+        }, 0);
     }
 
     function updateVisibility(visibleNodeTypes) {
+        console.log('calling update visibility');
         nodesByType.value.forEach((nodes, type) => {
             const isVisible = visibleNodeTypes.has(type);
             nodes.forEach(node => {

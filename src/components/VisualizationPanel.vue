@@ -185,6 +185,7 @@ onMounted(() => {
 
   window.addEventListener('wheel', handleWheel, { passive: false });
 
+  console.log('about to call mounted panel visualization')
   updatePanelVisualization()
 });
 
@@ -201,12 +202,14 @@ onUnmounted(() => {
 });
 
 watch(() => props.nodes, (newNodes) => {
+  console.log('about the call the watch for prop nodes.', props.links, props.visibleNodeTypes)
   updateVisualization(newNodes, props.links);
   updateVisibility(props.visibleNodeTypes);
   updateCamera(camera, controls);
 }, { deep: true });
 
 watch(() => props.visibleNodeTypes, () => {
+  console.log('updating visibility from watch', props.visibleNodeTypes)
   updateVisibility(props.visibleNodeTypes);
 }, { deep: true });
 </script>

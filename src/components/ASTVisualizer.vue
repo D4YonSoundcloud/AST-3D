@@ -9,7 +9,9 @@ import VisualizationPanel from './VisualizationPanel.vue';
 import InfoPanel from './InfoPanel.vue';
 import NodeTypeList from './NodeTypeList.vue';
 import SettingsPanel from './SettingsPanel.vue';
+import { useSettingsStore } from '../stores/settingsStore';
 
+const settingsStore = useSettingsStore()
 const astStore = useAstStore()
 const { availableNodeTypes, visibleNodeTypes, currentAstNodeTypes } = storeToRefs(astStore)
 
