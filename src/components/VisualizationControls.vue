@@ -15,6 +15,7 @@ const props = defineProps({
 
 const localHighlightDepth = ref(settingsStore.highlightDepth);
 const localNonConnectedOpacity = ref(settingsStore.nonConnectedOpacity);
+const highlightDirection = ref('down');
 
 const isMaxDepth = computed(() => {
   return props.maxPossibleDepth > 0 && localHighlightDepth.value >= props.maxPossibleDepth;
@@ -29,6 +30,13 @@ function updateNonConnectedOpacity(event) {
   const newOpacity = parseFloat(event.target.value);
   settingsStore.updateNonConnectedOpacity(newOpacity);
 }
+
+
+function toggleHighlightDirection() {
+  highlightDirection.value = highlightDirection.value === 'down' ? 'up' : 'down';
+  settingsStore.updateHighlightDirection(highlightDirection.value);
+}
+
 
 watch(() => settingsStore.highlightDepth, (newDepth) => {
   localHighlightDepth.value = newDepth;
@@ -68,6 +76,12 @@ watch(() => settingsStore.nonConnectedOpacity, (newOpacity) => {
           @input="updateNonConnectedOpacity"
       >
     </div>
+    <div class="control-group">
+      <label for="direction">Highlight Direction:</label>
+      <button id="direction" @click="toggleHighlightDirection">
+        {{ highlightDirection === 'down' ? 'Down ▼' : 'Up ▲' }}
+      </button>
+    </div>
 <!--    <div class="control-group">-->
 <!--      <label for="animation-duration">Animation Duration: {{ settingsStore.animationDuration.toFixed(2) }}s</label>-->
 <!--      <input style="margin: 0; width: 95%; cursor: grab;"-->
@@ -98,6 +112,20 @@ watch(() => settingsStore.nonConnectedOpacity, (newOpacity) => {
 }
 
 .control-group {
+}
+
+button {
+  padding: 5px 10px;
+  background-color: var(--node-bg);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+button:hover {
+  background-color: var(--hover-color);
 }
 
 label {

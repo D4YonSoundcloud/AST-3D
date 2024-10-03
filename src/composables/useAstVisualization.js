@@ -66,7 +66,7 @@ export function useAstVisualization(scene, graph) {
     }
 
     function createGeometryForDetail(shape, childrenCount, detailLevel) {
-        const size = Math.min(3 + childrenCount * 0.5, 10);
+        const size = Math.min(5 + childrenCount * 0.5);
         const segmentMultiplier = detailLevel === 'high' ? 0.5 : detailLevel === 'medium' ? 0.25 : 0.1;
 
         switch (shape) {
@@ -271,69 +271,174 @@ export function useAstVisualization(scene, graph) {
 
     function updateVisualization(nodes, links) {
         console.log('calling updateVisualization')
+        const existingNodes = new Map(graph.children
+            .filter(child => child instanceof LOD)
+            .map(node => [node.userData.id, node]));
+
         // Clear existing collections
         nodesByType.value = new Map();
         linksByType.value = new Map();
 
-        // Remove old objects from the scene
-        while(graph.children.length > 0) {
-            const object = graph.children[0];
-            graph.remove(object);
-            if (object instanceof LOD) {
-                returnMeshToPool(object);
-            } else if (object instanceof THREE.Line) {
-                returnLineToPool(object);
-            }
-        }
-
-        // Create or update nodes
+        // Update or create nodes
         nodes.forEach(node => {
-            const lodObject = getOrCreateMesh(node.type, node.children.length);
-            updateMesh(lodObject, node, graph);
+            let lodObject;
+            if (existingNodes.has(node.id)) {
+                lodObject = existingNodes.get(node.id);
+                updateExistingMesh(lodObject, node);
+            } else {
+                lodObject = getOrCreateMesh(node.type, node.children.length);
+                updateNewMesh(lodObject, node);
+            }
+
             if (!nodesByType.value.has(node.type)) {
                 nodesByType.value.set(node.type, new Set());
             }
             nodesByType.value.get(node.type).add(lodObject);
-            graph.add(lodObject);
+
+            if (!existingNodes.has(node.id)) {
+                graph.add(lodObject);
+            }
+            existingNodes.delete(node.id);
+        });
+
+        // Remove nodes that no longer exist
+        existingNodes.forEach(node => {
+            graph.remove(node);
+            returnMeshToPool(node);
         });
 
         graph.updateMatrixWorld(true);
 
-        // Create or update links
-        setTimeout(() => {
-            links.forEach(link => {
-                const sourceLOD = graph.children.find(child => child.userData.id === link.source);
-                const targetLOD = graph.children.find(child => child.userData.id === link.target);
+        // Update links
+        updateLinks(links);
+    }
 
-                if (sourceLOD && targetLOD) {
-                    const line = getOrCreateLine();
-                    updateLine(line, sourceLOD, targetLOD);
-                    line.userData.source = sourceLOD;
-                    line.userData.target = targetLOD;
-                    line.userData.relationshipType = link.type || 'other';
+    function updateExistingMesh(lodObject, node) {
+        lodObject.userData = {
+            ...node,
+            type: lodObject.userData.type,
+            originalColor: lodObject.userData.originalColor
+        };
+        const newPosition = calculateNodePosition(node);
+        if (lodObject.position.distanceTo(newPosition) > 0.1) {
+            lodObject.position.lerp(newPosition, 0.5); // Smooth transition
+        }
+    }
 
-                    // Set initial visibility based on source and target visibility
-                    line.visible = sourceLOD.visible && targetLOD.visible;
+    function updateNewMesh(lodObject, node) {
+        lodObject.position.copy(calculateNodePosition(node));
+        lodObject.userData = {
+            ...node,
+            type: lodObject.userData.type,
+            originalColor: lodObject.userData.originalColor
+        };
+    }
 
-                    const sourceType = sourceLOD.userData.type;
-                    const targetType = targetLOD.userData.type;
+    function calculateNodePosition(node){
+        const basePosition = new THREE.Vector3(0,0,0);
 
-                    if (!linksByType.value.has(sourceType)) {
-                        linksByType.value.set(sourceType, new Set());
-                    }
-                    if (!linksByType.value.has(targetType)) {
-                        linksByType.value.set(targetType, new Set());
-                    }
-                    linksByType.value.get(sourceType).add(line);
-                    linksByType.value.get(targetType).add(line);
+        //city view
 
+        if(settingsStore.modelType === 'city'){
+            const scopeMultiplier = Math.pow(SCOPE_MULTIPLIER, node.scopeLevel);
+            const spawnRange = BASE_SPAWN_RANGE * scopeMultiplier;
+
+            const randomAngle = Math.random() * Math.PI * 2;
+            const randomRadius = Math.random() * spawnRange;
+
+            basePosition.x = Math.cos(randomAngle) * randomRadius;
+            basePosition.z = Math.sin(randomAngle) * randomRadius;
+            basePosition.y = (-node.scopeLevel * VERTICAL_SPACING) + (5 + node.children.length * (node.type === 'Program' ? 1.5 : 3));
+
+            // If the node has a parent, position it relative to the parent
+            if (node.parent !== undefined) {
+                const parentNode = graph.children.find(child => child.userData.id === node.parent);
+                if (parentNode) {
+                    const childAngle = Math.random() * Math.PI * 2;
+                    const childRadius = Math.random() * CHILD_SPAWN_RANGE;
+
+                    basePosition.x = parentNode.position.x + Math.cos(childAngle) * childRadius;
+                    basePosition.z = parentNode.position.z + Math.sin(childAngle) * childRadius;
+                }
+            }
+
+            if (node.type === 'Program') {
+                basePosition.x = 0;
+                basePosition.z = 0;
+                basePosition.y = (-node.scopeLevel * VERTICAL_SPACING) + (50 + node.children.length * 1.5);
+            }
+        }
+
+
+        if(settingsStore.modelType === 'tree') {
+            //tree view
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 50 + Math.random() * 100; // Adjust these values as needed
+
+            basePosition.x = Math.cos(angle) * radius;
+            basePosition.z = Math.sin(angle) * radius;
+            basePosition.y = -node.scopeLevel * 50; // Adjust vertical spacing as needed
+
+            if (node.parent) {
+                const parentNode = graph.children.find(child => child.userData.id === node.parent);
+                if (parentNode) {
+                    basePosition.add(parentNode.position);
+                }
+            }
+        }
+
+
+        return basePosition;
+    }
+
+    function updateLinks(links) {
+        const existingLines = new Map(graph.children
+            .filter(child => child instanceof Line2)
+            .map(line => [`${line.userData.source.userData.id}-${line.userData.target.userData.id}`, line]));
+
+        links.forEach(link => {
+            const sourceLOD = graph.children.find(child => child.userData.id === link.source);
+            const targetLOD = graph.children.find(child => child.userData.id === link.target);
+
+            if (sourceLOD && targetLOD) {
+                const lineKey = `${link.source}-${link.target}`;
+                let line;
+
+                if (existingLines.has(lineKey)) {
+                    line = existingLines.get(lineKey);
+                    existingLines.delete(lineKey);
+                } else {
+                    line = getOrCreateLine();
                     graph.add(line);
                 }
-            });
 
-            centerVisualization();
-        }, 0);
+                updateLine(line, sourceLOD, targetLOD);
+                line.userData.source = sourceLOD;
+                line.userData.target = targetLOD;
+                line.userData.relationshipType = link.type || 'other';
+                line.visible = sourceLOD.visible && targetLOD.visible;
+
+                const sourceType = sourceLOD.userData.type;
+                const targetType = targetLOD.userData.type;
+
+                if (!linksByType.value.has(sourceType)) {
+                    linksByType.value.set(sourceType, new Set());
+                }
+                if (!linksByType.value.has(targetType)) {
+                    linksByType.value.set(targetType, new Set());
+                }
+                linksByType.value.get(sourceType).add(line);
+                linksByType.value.get(targetType).add(line);
+            }
+        });
+
+        // Remove lines that no longer exist
+        existingLines.forEach(line => {
+            graph.remove(line);
+            returnLineToPool(line);
+        });
     }
+
 
     function updateVisibility(visibleNodeTypes) {
         console.log('calling update visibility');

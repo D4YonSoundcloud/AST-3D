@@ -29,6 +29,7 @@ const props = defineProps({
 const emit = defineEmits(['updateInfoPanel']);
 
 const canvasContainer = ref();
+const initialData = ref(null);
 
 const {
   scene,
@@ -42,7 +43,8 @@ const {
   toggleLights,
   lightsOn,
   isShiftPressed,
-} = useThreeJS(canvasContainer);
+  isDataReady,
+} = useThreeJS(canvasContainer, initialData);
 
 const {
   hoveredNode,
@@ -80,7 +82,20 @@ function handleWheel(event) {
     const newDepth = Math.max(0, Math.min(maxPossibleDepth.value, settingsStore.highlightDepth + delta));
     settingsStore.updateHighlightDepth(newDepth);
     updateHighlight();
-    // centerVisualization();
+  }
+}
+
+function setupControlsEventListeners() {
+  if (controls.value) {
+    controls.value.addEventListener('start', onCameraControlsStart);
+    controls.value.addEventListener('end', onCameraControlsEnd);
+  }
+}
+
+function cleanupControlsEventListeners() {
+  if (controls.value) {
+    controls.value.removeEventListener('start', onCameraControlsStart);
+    controls.value.removeEventListener('end', onCameraControlsEnd);
   }
 }
 
@@ -88,48 +103,6 @@ function updateInfoPanel(nodeData) {
   if (!isCameraAnimating.value) {
     emit('updateInfoPanel', nodeData);
   }
-}
-function updatePanelVisualization() {
-  updateVisualization(props.nodes, props.links);
-  updateVisibility(props.visibleNodeTypes);
-
-  const box = new THREE.Box3().setFromObject(graph);
-  const size = new THREE.Vector3();
-  const center = new THREE.Vector3();
-  box.getSize(size);
-  box.getCenter(center);
-
-  const maxDim = Math.max(size.x, size.y, size.z);
-  const fov = camera.fov * (Math.PI / 180);
-  let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-
-  console.log(center)
-
-  camera.position.set(center.x, center.y, center.z + 1000);
-  camera.lookAt(center);
-
-  controls.target.copy(center);
-
-  camera.near = cameraZ / 100;
-  camera.far = cameraZ * 100;
-  camera.updateProjectionMatrix();
-
-  controls.maxDistance = cameraZ * 10;
-  controls.value.enableKeys = false;
-  controls.value.mouseButtons = {
-    LEFT: THREE.MOUSE.ROTATE,
-    MIDDLE: THREE.MOUSE.DOLLY,
-    RIGHT: THREE.MOUSE.PAN
-  };
-  controls.value.touches = {
-    ONE: THREE.TOUCH.ROTATE,
-    TWO: THREE.TOUCH.DOLLY_PAN
-  };
-  controls.update();
-
-  nextTick(() => {
-    updateCamera(camera, controls);
-  });
 }
 
 function onMouseDown(event) {
@@ -154,18 +127,28 @@ function updateCursor() {
 
 watch(cursorType, updateCursor);
 
+watch(() => settingsStore.highlightDirection, () => {
+  if (selectedNode.value) {
+    onNodeLeftClick(graph.children.find(child => child.userData.id === selectedNode.value));
+  }
+});
+
+watch(controls, (newControls) => {
+  if (newControls) {
+    setupControlsEventListeners();
+  }
+});
+
 watch(() => settingsStore.updateTrigger, () => {
   Object.keys(settingsStore.settings).forEach(nodeType => {
     updateNodeSettings(nodeType);
     updateHighlight();
-    centerVisualization();
   });
 });
 
 watch(() => settingsStore.linkColors, (newColors, oldColors) => {
   if (JSON.stringify(newColors) !== JSON.stringify(oldColors)) {
     updateHighlight();
-    centerVisualization();
   }
 }, { deep: true });
 
@@ -173,20 +156,13 @@ onMounted(() => {
   if (canvasContainer.value) {
     canvasContainer.value.appendChild(renderer.domElement);
     handleResize();
-    startRenderLoop();
   }
   canvasContainer.value.addEventListener('mousemove', onMouseMove);
-
-  controls.value.addEventListener('start', onCameraControlsStart);
-  controls.value.addEventListener('end', onCameraControlsEnd);
-
   canvasContainer.value.addEventListener('mousedown', onMouseDown);
   window.addEventListener('mouseup', onMouseUp);
-
   window.addEventListener('wheel', handleWheel, { passive: false });
 
-  console.log('about to call mounted panel visualization')
-  updatePanelVisualization()
+  console.log('Mounted visualization panel');
 });
 
 onUnmounted(() => {
@@ -202,10 +178,10 @@ onUnmounted(() => {
 });
 
 watch(() => props.nodes, (newNodes) => {
-  console.log('about the call the watch for prop nodes.', props.links, props.visibleNodeTypes)
-  updateVisualization(newNodes, props.links);
+  console.log('about to call the watch for prop nodes.', props.links, props.visibleNodeTypes);
+  initialData.value = newNodes; // This will trigger the watcher in useThreeJS
+  updateVisualization(props.nodes, props.links);
   updateVisibility(props.visibleNodeTypes);
-  updateCamera(camera, controls);
 }, { deep: true });
 
 watch(() => props.visibleNodeTypes, () => {

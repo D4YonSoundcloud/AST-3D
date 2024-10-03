@@ -13,8 +13,11 @@ export const useSettingsStore = defineStore('settings', () => {
     const nonConnectedOpacity = ref(0.2);
     const updateTrigger = ref(0);
     const currentTemplate = ref('default');
+    const modelType = ref('city')
 
     const availableTemplates = computed(() => Object.keys(nodeTemplates));
+
+    const highlightDirection = ref('down');
 
 
     function saveSettings() {
@@ -25,6 +28,10 @@ export const useSettingsStore = defineStore('settings', () => {
             nonConnectedOpacity: nonConnectedOpacity.value
         }));
         updateTrigger.value += 1;
+    }
+
+    function updateHighlightDirection(direction) {
+        highlightDirection.value = direction;
     }
 
     function loadSettings() {
@@ -94,6 +101,8 @@ export const useSettingsStore = defineStore('settings', () => {
         updateTrigger,
         currentTemplate,
         availableTemplates,
+        modelType,
+        highlightDirection,
         saveSettings,
         resetToDefaults,
         updateNodeTypeSetting,
@@ -101,5 +110,6 @@ export const useSettingsStore = defineStore('settings', () => {
         updateHighlightDepth,
         updateNonConnectedOpacity,
         applyTemplate,
+        updateHighlightDirection,
     };
 });

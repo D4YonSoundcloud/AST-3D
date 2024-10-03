@@ -98,10 +98,10 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
 
         // Highlight nodes and edges based on depth
         if (hasSelectedNode) {
-            highlightNodeAndChildren(selectedNode.value, settingsStore.highlightDepth);
+            highlightNodeAndRelatives(selectedNode.value, settingsStore.highlightDepth);
         }
         if (hasHoveredNode && hoveredNode.value.userData.id !== selectedNode.value) {
-            highlightNodeAndChildren(hoveredNode.value.userData.id, settingsStore.highlightDepth);
+            highlightNodeAndRelatives(hoveredNode.value.userData.id, settingsStore.highlightDepth);
         }
 
         // Make non-connected nodes and edges transparent
@@ -136,7 +136,7 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
      * @param {number} maxDepth - The maximum depth to highlight
      * @param {number} currentDepth - The current depth in the recursion
      */
-    function highlightNodeAndChildren(nodeId, maxDepth, currentDepth = 0) {
+    function highlightNodeAndRelatives(nodeId, maxDepth, currentDepth = 0) {
         const node = graph.children.find(child => child instanceof LOD && child.userData.id === nodeId);
         if (!node) return;
 
@@ -144,12 +144,36 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
         highlightNode(node, currentDepth === 0, highlightColor);
 
         if (currentDepth < maxDepth) {
-            const childNodes = getChildNodes(node);
-            childNodes.forEach(childNode => {
-                highlightEdge(node, childNode, highlightColor);
-                highlightNodeAndChildren(childNode.userData.id, maxDepth, currentDepth + 1);
+            const relatives = settingsStore.highlightDirection === 'down' ? getChildNodes(node) : getParentNodes(node);
+            relatives.forEach(relativeNode => {
+                highlightEdge(node, relativeNode, highlightColor);
+                highlightNodeAndRelatives(relativeNode.userData.id, maxDepth, currentDepth + 1);
             });
         }
+
+    }
+
+    function getParentNodes(node) {
+        if (!node || !node.userData || !node.userData.parent) return [];
+
+        const parentId = node.userData.parent;
+        const parentNode = graph.children.find(child =>
+            child instanceof THREE.LOD && child.userData.id === parentId
+        );
+
+        return parentNode ? [parentNode] : [];
+    }
+
+    function getChildNodes(node) {
+        const childNodes = [];
+        graph.children.forEach(child => {
+            if (child instanceof Line2 &&
+                child.userData.source === node &&
+                child.userData.relationshipType === 'parent-child') {
+                childNodes.push(child.userData.target);
+            }
+        });
+        return childNodes;
     }
 
     /**
@@ -270,10 +294,10 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
             originalControlsTarget.value = controls.value.target.clone();
         }
 
-        const connectedNodes = getChildNodes(node);
+        const relatedNodes = settingsStore.highlightDirection === 'down' ? getChildNodes(node) : getParentNodes(node);
         const boundingBox = new THREE.Box3();
 
-        connectedNodes.forEach(connectedNode => {
+        relatedNodes.forEach(connectedNode => {
             boundingBox.expandByObject(connectedNode);
         });
 
@@ -391,17 +415,7 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
         return nodes.filter(node => isObjectVisible(camera, node)).length;
     }
 
-    function getChildNodes(node) {
-        const childNodes = [];
-        graph.children.forEach(child => {
-            if (child instanceof Line2 &&
-                child.userData.source === node &&
-                child.userData.relationshipType === 'parent-child') {
-                childNodes.push(child.userData.target);
-            }
-        });
-        return childNodes;
-    }
+
 
 
     onMounted(() => {

@@ -1,17 +1,18 @@
-import { ref, onMounted, onUnmounted } from 'vue';
+import {onUnmounted, ref, watch} from 'vue';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import {OrbitControls} from 'three/examples/jsm/controls/OrbitControls';
 import {Line2} from "three/addons/lines/Line2.js";
 
-export function useThreeJS(container) {
+export function useThreeJS(container, initialData) {
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 5000);
     const renderer = new THREE.WebGLRenderer({
-        antialias: true, // Enable anti-aliasing
-        alpha: true // Enable transparency
+        antialias: true,
+        alpha: true
     });
     const controls = ref(null);
     const graph = new THREE.Group();
+    const isDataReady = ref(false);
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
     const pointLight = new THREE.PointLight(0xF44336, 0.8);
@@ -21,34 +22,61 @@ export function useThreeJS(container) {
     const isShiftPressed = ref(false);
 
     function initVisualization() {
+        if (!isDataReady.value) return;
+
         camera.position.set(200, 200, 300);
         camera.lookAt(0, 0, 0);
 
         controls.value = new OrbitControls(camera, renderer.domElement);
         controls.value.enableDamping = true;
-        controls.value.dampingFactor = 0.1; // Increased for smoother movement
-        controls.value.rotateSpeed = 0.85; // Adjusted for smoother rotation
+        controls.value.dampingFactor = 0.1;
+        controls.value.rotateSpeed = 0.4;
         controls.value.maxDistance = 4000;
         controls.value.minDistance = 10;
 
         scene.add(graph);
 
-        // Set up lights
         pointLight.position.set(200, 300, 200);
         pointLight.lookAt(0, 0, 0);
         pointLight2.position.set(450, -350, -200);
         pointLight2.lookAt(0, 0, 0);
 
-        // Add lights to the scene based on initial state
         if (lightsOn.value) {
             scene.add(ambientLight);
             scene.add(pointLight);
             scene.add(pointLight2);
         }
 
-        // Add event listeners for keydown and keyup
         window.addEventListener('keydown', handleKeyDown);
         window.addEventListener('keyup', handleKeyUp);
+
+        // Calculate bounding box of all visible nodes
+        const boundingBox = new THREE.Box3();
+        graph.children.forEach(child => {
+            if (child.visible) {
+                boundingBox.expandByObject(child);
+            }
+        });
+
+        // Adjust camera to fit all visible nodes
+        const center = new THREE.Vector3();
+        boundingBox.getCenter(center);
+        const size = new THREE.Vector3();
+        boundingBox.getSize(size);
+
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const fov = camera.fov * (Math.PI / 180);
+        const cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.5;
+
+        camera.position.set(center.x, center.y, center.z + cameraZ);
+        camera.lookAt(center);
+
+        const minZ = boundingBox.min.z;
+        camera.far = (cameraZ - minZ) * 2;
+        camera.updateProjectionMatrix();
+
+        controls.value.target.copy(center);
+        controls.value.update();
     }
 
     function handleKeyDown(event) {
@@ -122,14 +150,17 @@ export function useThreeJS(container) {
         }
     }
 
-    onMounted(() => {
-        initVisualization();
-        if (container.value) {
-            container.value.appendChild(renderer.domElement);
-            handleResize();
+    watch(() => initialData.value, (newData) => {
+        if (newData && newData.length > 0) {
+            isDataReady.value = true;
+            initVisualization();
+            if (container.value) {
+                container.value.appendChild(renderer.domElement);
+                handleResize();
+            }
+            startRenderLoop();
+            window.addEventListener('resize', handleResize);
         }
-        startRenderLoop();
-        window.addEventListener('resize', handleResize);
     });
 
     onUnmounted(() => {
@@ -149,5 +180,6 @@ export function useThreeJS(container) {
         toggleLights,
         lightsOn,
         isShiftPressed,
+        isDataReady,
     };
 }

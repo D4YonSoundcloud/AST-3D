@@ -36,7 +36,7 @@ export function analyzeCode(code, astStore) {
         }
 
         const nodeObj = {
-            id: nodeId++,
+            id: `node_${nodeId++}`,
             type: node.type,
             loc: node.loc,
             parent: parent,
