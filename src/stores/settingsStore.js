@@ -62,6 +62,10 @@ export const useSettingsStore = defineStore('settings', () => {
         saveSettings();
     }
 
+    function updateModelType(type) {
+        modelType.value = type;
+    }
+
     function updateNodeTypeSetting(nodeType, property, value) {
         if (!settings.value[nodeType]) {
             settings.value[nodeType] = { ...nodeTemplates.default.nodeTypes[nodeType] };
@@ -111,5 +115,6 @@ export const useSettingsStore = defineStore('settings', () => {
         updateNonConnectedOpacity,
         applyTemplate,
         updateHighlightDirection,
+        updateModelType,
     };
 });

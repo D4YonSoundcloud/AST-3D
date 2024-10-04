@@ -31,7 +31,7 @@ export function useThreeJS(container, initialData) {
         controls.value.enableDamping = true;
         controls.value.dampingFactor = 0.1;
         controls.value.rotateSpeed = 0.4;
-        controls.value.maxDistance = 4000;
+        controls.value.maxDistance = 100000;
         controls.value.minDistance = 10;
 
         scene.add(graph);
@@ -72,7 +72,7 @@ export function useThreeJS(container, initialData) {
         camera.lookAt(center);
 
         const minZ = boundingBox.min.z;
-        camera.far = (cameraZ - minZ) * 2;
+        camera.far = (cameraZ - minZ) * 100;
         camera.updateProjectionMatrix();
 
         controls.value.target.copy(center);
@@ -82,6 +82,7 @@ export function useThreeJS(container, initialData) {
     function handleKeyDown(event) {
         if (event.key === 'Shift') {
             isShiftPressed.value = true;
+            console.log(isShiftPressed.value)
             if (controls.value) {
                 controls.value.enableZoom = false;
             }

@@ -67,6 +67,8 @@ const {
   updateVisibility,
   updateNodeSettings,
   centerVisualization,
+  recalculateAllNodePositions,
+  isTransitioning,
 } = useAstVisualization(scene, graph);
 
 defineExpose({
@@ -152,6 +154,24 @@ watch(() => settingsStore.linkColors, (newColors, oldColors) => {
   }
 }, { deep: true });
 
+watch(() => settingsStore.modelType, async () => {
+  console.log('Model type changed, re-rendering visualization');
+  await recalculateAllNodePositions();
+  updateVisibility(props.visibleNodeTypes);
+});
+
+watch(() => props.nodes, (newNodes) => {
+  console.log('about to call the watch for prop nodes.', props.links, props.visibleNodeTypes);
+  initialData.value = newNodes; // This will trigger the watcher in useThreeJS
+  updateVisualization(props.nodes, props.links);
+  updateVisibility(props.visibleNodeTypes);
+}, { deep: true });
+
+watch(() => props.visibleNodeTypes, () => {
+  console.log('updating visibility from watch', props.visibleNodeTypes)
+  updateVisibility(props.visibleNodeTypes);
+}, { deep: true });
+
 onMounted(() => {
   if (canvasContainer.value) {
     canvasContainer.value.appendChild(renderer.domElement);
@@ -177,21 +197,14 @@ onUnmounted(() => {
   window.removeEventListener('wheel', handleWheel);
 });
 
-watch(() => props.nodes, (newNodes) => {
-  console.log('about to call the watch for prop nodes.', props.links, props.visibleNodeTypes);
-  initialData.value = newNodes; // This will trigger the watcher in useThreeJS
-  updateVisualization(props.nodes, props.links);
-  updateVisibility(props.visibleNodeTypes);
-}, { deep: true });
 
-watch(() => props.visibleNodeTypes, () => {
-  console.log('updating visibility from watch', props.visibleNodeTypes)
-  updateVisibility(props.visibleNodeTypes);
-}, { deep: true });
 </script>
 
 <template>
   <div ref="canvasContainer" class="canvas-container">
+    <div v-if="isTransitioning" class="recalculating-overlay">
+      Loading
+    </div>
     <VisualizationControls :maxPossibleDepth="maxPossibleDepth"/>
   </div>
 </template>
@@ -203,5 +216,20 @@ watch(() => props.visibleNodeTypes, () => {
   overflow: hidden;
   z-index: 1;
   background: var(--visual-bg-color);
+}
+
+.recalculating-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.5em;
+  z-index: 1000;
 }
 </style>

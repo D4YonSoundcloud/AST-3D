@@ -4,7 +4,7 @@ import { useSettingsStore } from '../stores/settingsStore';
 import { storeToRefs } from 'pinia';
 
 const settingsStore = useSettingsStore();
-const { highlightDepth } = storeToRefs(settingsStore);
+const { highlightDepth, modelType } = storeToRefs(settingsStore);
 
 const props = defineProps({
   maxPossibleDepth: {
@@ -21,6 +21,8 @@ const isMaxDepth = computed(() => {
   return props.maxPossibleDepth > 0 && localHighlightDepth.value >= props.maxPossibleDepth;
 });
 
+const modelTypes = ['city', 'tree', 'tree2d'];
+
 function updateHighlightDepth(event) {
   const newDepth = parseInt(event.target.value);
   settingsStore.updateHighlightDepth(newDepth);
@@ -35,6 +37,10 @@ function updateNonConnectedOpacity(event) {
 function toggleHighlightDirection() {
   highlightDirection.value = highlightDirection.value === 'down' ? 'up' : 'down';
   settingsStore.updateHighlightDirection(highlightDirection.value);
+}
+
+function changeModelType(event) {
+  settingsStore.updateModelType(event.target.value);
 }
 
 
@@ -59,7 +65,7 @@ watch(() => settingsStore.nonConnectedOpacity, (newOpacity) => {
           :value="localHighlightDepth"
           @change="updateHighlightDepth"
       >
-        <option v-for="i in (props.maxPossibleDepth > 0 ? props.maxPossibleDepth + 1 : 6)" :key="i-1" :value="i-1">
+        <option v-for="i in (props.maxPossibleDepth > 0 ? props.maxPossibleDepth + 1 : 26)" :key="i-1" :value="i-1">
           {{ i-1 }}
         </option>
       </select>
@@ -77,11 +83,23 @@ watch(() => settingsStore.nonConnectedOpacity, (newOpacity) => {
       >
     </div>
     <div class="control-group">
-      <label for="direction">Highlight Direction:</label>
-      <button id="direction" @click="toggleHighlightDirection">
-        {{ highlightDirection === 'down' ? 'Down ▼' : 'Up ▲' }}
-      </button>
+      <label for="model-type">Model:</label>
+      <select
+          id="model-type"
+          :value="modelType"
+          @change="changeModelType"
+      >
+        <option v-for="type in modelTypes" :key="type" :value="type">
+          {{ type.charAt(0).toUpperCase() + type.slice(1) }}
+        </option>
+      </select>
     </div>
+<!--    <div class="control-group">-->
+<!--      <label for="direction">Highlight Direction:</label>-->
+<!--      <button id="direction" @click="toggleHighlightDirection">-->
+<!--        {{ highlightDirection === 'down' ? 'Down ▼' : 'Up ▲' }}-->
+<!--      </button>-->
+<!--    </div>-->
 <!--    <div class="control-group">-->
 <!--      <label for="animation-duration">Animation Duration: {{ settingsStore.animationDuration.toFixed(2) }}s</label>-->
 <!--      <input style="margin: 0; width: 95%; cursor: grab;"-->

@@ -113,18 +113,6 @@ function applyTemplate(templateName) {
           </div>
         </div>
       </div>
-      <div class="highlight-depth-setting">
-        <h4>Highlight Depth</h4>
-        <input
-            type="number"
-            :value="settingsStore.highlightDepth"
-            @input="updateHighlightDepth"
-            min="0"
-            max="5"
-            step="1"
-        >
-        <span class="depth-description">{{ settingsStore.highlightDepth === 0 ? 'Node only' : `Up to ${settingsStore.highlightDepth} level${settingsStore.highlightDepth > 1 ? 's' : ''}` }}</span>
-      </div>
       <div class="link-color-settings">
         <h4>Link Colors</h4>
         <div class="color-picker">

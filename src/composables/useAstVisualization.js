@@ -7,6 +7,7 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { useSettingsStore } from '../stores/settingsStore';
 import { nodeTemplates } from "@/templates/nodeTemplates.js";
+import { gsap } from "gsap";
 
 const BASE_SPAWN_RANGE = 150;
 const SCOPE_MULTIPLIER = 2;
@@ -20,6 +21,7 @@ export function useAstVisualization(scene, graph) {
     const visibleLinks = shallowRef(new Set());
     const nodesByType = shallowRef(new Map());
     const linksByType = shallowRef(new Map());
+    const isTransitioning = ref(false);
 
     const meshPool = new Map();
     const linePool = [];
@@ -270,6 +272,8 @@ export function useAstVisualization(scene, graph) {
     }
 
     function updateVisualization(nodes, links) {
+        isTransitioning.value = true
+
         console.log('calling updateVisualization')
         const existingNodes = new Map(graph.children
             .filter(child => child instanceof LOD)
@@ -311,6 +315,7 @@ export function useAstVisualization(scene, graph) {
 
         // Update links
         updateLinks(links);
+        isTransitioning.value = false;
     }
 
     function updateExistingMesh(lodObject, node) {
@@ -335,60 +340,150 @@ export function useAstVisualization(scene, graph) {
     }
 
     function calculateNodePosition(node){
-        const basePosition = new THREE.Vector3(0,0,0);
+        const basePosition = new THREE.Vector3(0, 0, 0);
 
-        //city view
+        if (settingsStore.modelType === 'city') {
+            return calculateCityPosition(node, basePosition);
+        } else if (settingsStore.modelType === 'tree') {
+            return calculateTreePosition(node, basePosition);
+        } else if (settingsStore.modelType === 'tree2d') {
+            return calculateTree2DPosition(node, basePosition);
+        }
 
-        if(settingsStore.modelType === 'city'){
-            const scopeMultiplier = Math.pow(SCOPE_MULTIPLIER, node.scopeLevel);
-            const spawnRange = BASE_SPAWN_RANGE * scopeMultiplier;
+        // Default to city model if unknown type
+        return calculateCityPosition(node, basePosition);
+    }
 
-            const randomAngle = Math.random() * Math.PI * 2;
-            const randomRadius = Math.random() * spawnRange;
+    function calculateCityPosition(node, basePosition) {
+        const scopeMultiplier = Math.pow(SCOPE_MULTIPLIER, node.scopeLevel);
+        const spawnRange = BASE_SPAWN_RANGE * scopeMultiplier;
 
-            basePosition.x = Math.cos(randomAngle) * randomRadius;
-            basePosition.z = Math.sin(randomAngle) * randomRadius;
-            basePosition.y = (-node.scopeLevel * VERTICAL_SPACING) + (5 + node.children.length * (node.type === 'Program' ? 1.5 : 3));
+        const randomAngle = Math.random() * Math.PI * 2;
+        const randomRadius = Math.random() * spawnRange;
 
-            // If the node has a parent, position it relative to the parent
-            if (node.parent !== undefined) {
-                const parentNode = graph.children.find(child => child.userData.id === node.parent);
-                if (parentNode) {
-                    const childAngle = Math.random() * Math.PI * 2;
-                    const childRadius = Math.random() * CHILD_SPAWN_RANGE;
+        basePosition.x = Math.cos(randomAngle) * randomRadius;
+        basePosition.z = Math.sin(randomAngle) * randomRadius;
+        basePosition.y = (-node.scopeLevel * VERTICAL_SPACING) + (5 + node.children.length * (node.type === 'Program' ? 1.5 : 3));
 
-                    basePosition.x = parentNode.position.x + Math.cos(childAngle) * childRadius;
-                    basePosition.z = parentNode.position.z + Math.sin(childAngle) * childRadius;
-                }
-            }
+        // If the node has a parent, position it relative to the parent
+        if (node.parent !== undefined) {
+            const parentNode = graph.children.find(child => child.userData.id === node.parent);
+            if (parentNode) {
+                const childAngle = Math.random() * Math.PI * 2;
+                const childRadius = Math.random() * CHILD_SPAWN_RANGE;
 
-            if (node.type === 'Program') {
-                basePosition.x = 0;
-                basePosition.z = 0;
-                basePosition.y = (-node.scopeLevel * VERTICAL_SPACING) + (50 + node.children.length * 1.5);
+                basePosition.x = parentNode.position.x + Math.cos(childAngle) * childRadius;
+                basePosition.z = parentNode.position.z + Math.sin(childAngle) * childRadius;
             }
         }
 
+        if (node.type === 'Program') {
+            basePosition.x = 0;
+            basePosition.z = 0;
+            basePosition.y = (-node.scopeLevel * VERTICAL_SPACING) + (50 + node.children.length * 1.5);
+        }
 
-        if(settingsStore.modelType === 'tree') {
-            //tree view
-            const angle = Math.random() * Math.PI * 2;
-            const radius = 50 + Math.random() * 100; // Adjust these values as needed
+        return basePosition;
+    }
 
-            basePosition.x = Math.cos(angle) * radius;
-            basePosition.z = Math.sin(angle) * radius;
-            basePosition.y = -node.scopeLevel * 50; // Adjust vertical spacing as needed
+    function calculateTreePosition(node, basePosition) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 50 + Math.random() * 100; // Adjust these values as needed
 
-            if (node.parent) {
-                const parentNode = graph.children.find(child => child.userData.id === node.parent);
-                if (parentNode) {
-                    basePosition.add(parentNode.position);
-                }
+        basePosition.x = Math.cos(angle) * radius;
+        basePosition.z = Math.sin(angle) * radius;
+        basePosition.y = -node.scopeLevel * 50; // Adjust vertical spacing as needed
+
+        if (node.parent) {
+            const parentNode = graph.children.find(child => child.userData.id === node.parent);
+            if (parentNode) {
+                basePosition.add(parentNode.position);
             }
         }
 
 
         return basePosition;
+    }
+
+    function calculateTree2DPosition(node, basePosition) {
+        const HORIZONTAL_SPACING_2D = 60;
+        const VERTICAL_SPACING_2D = 100;
+
+        if (node.type === 'Program') {
+            basePosition.set(0, 0, 0);
+        } else {
+            const parentNode = graph.children.find(child => child instanceof THREE.LOD && child.userData.id === node.parent);
+            if (parentNode) {
+                const siblingIndex = parentNode.userData.children.indexOf(node.id);
+                const siblingCount = parentNode.userData.children.length;
+
+                basePosition.x = parentNode.position.x + (siblingIndex - (siblingCount - 1) / 2) * HORIZONTAL_SPACING_2D;
+                basePosition.y = parentNode.position.y - VERTICAL_SPACING_2D;
+                basePosition.z = parentNode.position.z;
+            } else {
+                // If parent not found, use a fallback position
+                const randomOffset = (Math.random() - 0.5) * 75;
+                basePosition.set(randomOffset, -node.scopeLevel * VERTICAL_SPACING_2D, randomOffset);
+            }
+        }
+
+        return basePosition;
+    }
+
+    function recalculateAllNodePositions() {
+        isTransitioning.value = true;
+
+        // Hide all lines
+        graph.children.forEach(child => {
+            if (child instanceof Line2) {
+                child.visible = false;
+            }
+        });
+
+        const animations = [];
+
+        graph.children.forEach(child => {
+            if (child instanceof THREE.LOD) {
+                const newPosition = calculateNodePosition(child.userData);
+
+                // Immediately set the position for layout calculation
+                child.position.copy(newPosition);
+
+                // Then animate from the old position to the new position
+                const oldPosition = child.userData.oldPosition || child.position.clone();
+                child.position.copy(oldPosition);
+
+                const animation = new Promise(resolve => {
+                    gsap.to(child.position, {
+                        x: newPosition.x,
+                        y: newPosition.y,
+                        z: newPosition.z,
+                        duration: 0,
+                        onComplete: resolve
+                    });
+
+                    // child.position.x = newPosition.x
+                    // child.position.y = newPosition.y
+                    // child.position.z = newPosition.z
+                });
+
+                animations.push(animation);
+
+                // Store the new position for the next transition
+                child.userData.oldPosition = newPosition.clone();
+            }
+        });
+
+        return Promise.all(animations).then(() => {
+            // Update and show all lines after all nodes have been repositioned
+            graph.children.forEach(child => {
+                if (child instanceof Line2) {
+                    updateLine(child, child.userData.source, child.userData.target);
+                    child.visible = true;
+                }
+            });
+            isTransitioning.value = false;
+        });
     }
 
     function updateLinks(links) {
@@ -478,46 +573,13 @@ export function useAstVisualization(scene, graph) {
         }
         return 'high';
     }
-    function centerVisualization() {
-        if (graph.children.length === 0) return;
-
-        // Calculate the bounding box of all nodes and lines
-        const boundingBox = new THREE.Box3();
-        graph.children.forEach(child => {
-            if (child instanceof THREE.LOD || child instanceof Line2) {
-                boundingBox.expandByObject(child);
-            }
-        });
-
-        const center = new THREE.Vector3();
-        boundingBox.getCenter(center);
-
-        // Move all nodes and update lines
-        graph.children.forEach(child => {
-            if (child instanceof THREE.LOD) {
-                child.position.sub(center);
-            } else if (child instanceof Line2) {
-                // Update line positions
-                const sourcePos = child.userData.source.position;
-                const targetPos = child.userData.target.position;
-                const positions = new Float32Array([
-                    sourcePos.x - center.x, sourcePos.y - center.y, sourcePos.z - center.z,
-                    targetPos.x - center.x, targetPos.y - center.y, targetPos.z - center.z
-                ]);
-                child.geometry.setPositions(positions);
-                child.computeLineDistances();
-            }
-        });
-
-        // Update the graph's world matrix
-        graph.updateMatrixWorld(true);
-    }
 
     return {
         updateVisualization,
         updateVisibility,
         updateNodeSettings,
-        centerVisualization,
+        recalculateAllNodePositions,
+        isTransitioning,
         visibleNodes,
         visibleLinks,
         nodesByType,
