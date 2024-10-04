@@ -141,12 +141,21 @@ watch(controls, (newControls) => {
   }
 });
 
-watch(() => settingsStore.updateTrigger, () => {
-  Object.keys(settingsStore.settings).forEach(nodeType => {
-    updateNodeSettings(nodeType);
-    updateHighlight();
-  });
-});
+watch(
+    () => settingsStore.settings,
+    (newSettings, oldSettings) => {
+      // Check if nodeTypes have changed
+      if (JSON.stringify(newSettings.nodeTypes) !== JSON.stringify(oldSettings.nodeTypes)) {
+        Object.keys(newSettings.nodeTypes).forEach(nodeType => {
+          updateNodeSettings(nodeType);
+        });
+      }
+
+      // Always update highlights, as other settings might have changed
+      updateHighlight();
+    },
+    { deep: true }
+);
 
 watch(() => settingsStore.linkColors, (newColors, oldColors) => {
   if (JSON.stringify(newColors) !== JSON.stringify(oldColors)) {

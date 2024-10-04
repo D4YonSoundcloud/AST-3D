@@ -55,7 +55,7 @@ watch(visibleNodeTypes, () => {}, { deep: true })
 
 
 onMounted(() => {
-  settingsStore.resetToDefaults();
+  // settingsStore.resetToDefaults();
   astStore.triggerVisualizationUpdate();
 })
 // Utility functions
