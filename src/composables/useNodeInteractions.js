@@ -15,7 +15,7 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
     const originalControlsTarget = ref(null);
     const isMovingCamera = ref(false);
     const isCameraAnimating = ref(false);
-    const cursorType = ref('grab');
+    const cursorType = ref('crosshair');
 
     const maxPossibleDepth = ref(0);
     const currentMaxDepth = ref(0);
@@ -71,7 +71,6 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
                 hoveredNode.value = null;
                 updateHighlight();
                 updateInfoPanel(null);
-                cursorType.value = 'grab';
             }
 
             renderer.domElement.onclick = null
@@ -389,12 +388,12 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
 
     function onCameraControlsStart() {
         isMovingCamera.value = true;
-        document.body.style.cursor = 'grabbing';  // Change cursor to grabbing
+        document.body.style.cursor = 'wait';  // Change cursor to grabbing
     }
 
     function onCameraControlsEnd() {
         isMovingCamera.value = false;
-        document.body.style.cursor = 'default';  // Reset cursor to default
+        document.body.style.cursor = 'crosshair';  // Reset cursor to default
     }
 
     function isObjectVisible(camera, object) {

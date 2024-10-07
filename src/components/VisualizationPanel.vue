@@ -125,8 +125,6 @@ function updateCursor() {
   }
 }
 
-
-
 watch(cursorType, updateCursor);
 
 watch(() => settingsStore.highlightDirection, () => {

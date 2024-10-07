@@ -72,7 +72,7 @@ watch(() => settingsStore.nonConnectedOpacity, (newOpacity) => {
     </div>
     <div class="control-group">
       <label for="opacity">Non-connected Opacity: {{ localNonConnectedOpacity.toFixed(2) }}</label>
-      <input style="margin: 0; width: 95%; cursor: grab;"
+      <input style="margin: 0; width: 95%; cursor: ew-resize;"
           type="range"
           id="opacity"
           v-model="localNonConnectedOpacity"
@@ -193,7 +193,6 @@ input[type="range"]::-webkit-slider-thumb {
   height: 16px;
   border-radius: 50%;
   background: var(--primary-color);
-  cursor: grabbing;
 }
 
 input[type="range"]::-moz-range-thumb {
