@@ -41,6 +41,7 @@ const {
   startRenderLoop,
   stopRenderLoop,
   toggleLights,
+  initVisualization,
   lightsOn,
   isShiftPressed,
   isDataReady,
@@ -148,7 +149,6 @@ watch(
           updateNodeSettings(nodeType);
         });
       }
-
       // Always update highlights, as other settings might have changed
       updateHighlight();
     },
@@ -165,6 +165,8 @@ watch(() => settingsStore.modelType, async () => {
   console.log('Model type changed, re-rendering visualization');
   await recalculateAllNodePositions();
   updateVisibility(props.visibleNodeTypes);
+  initVisualization();
+  updateHighlight();
 });
 
 watch(() => props.nodes, (newNodes) => {
@@ -178,6 +180,7 @@ watch(() => props.visibleNodeTypes, () => {
   console.log('updating visibility from watch', props.visibleNodeTypes)
   updateVisibility(props.visibleNodeTypes);
 }, { deep: true });
+
 
 onMounted(() => {
   if (canvasContainer.value) {

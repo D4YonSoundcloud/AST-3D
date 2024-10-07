@@ -24,16 +24,49 @@ export function useThreeJS(container, initialData) {
     function initVisualization() {
         if (!isDataReady.value) return;
 
+        setupCamera();
+        setupControls(camera, renderer);
+        setupLights();
+        setupEventListeners();
+        adjustCameraToFitScene();
+    }
+
+// Helper functions
+    function setupCamera() {
         camera.position.set(200, 200, 300);
         camera.lookAt(0, 0, 0);
+    }
 
-        controls.value = new OrbitControls(camera, renderer.domElement);
-        controls.value.enableDamping = true;
-        controls.value.dampingFactor = 0.1;
-        controls.value.rotateSpeed = 0.4;
-        controls.value.maxDistance = 100000;
-        controls.value.minDistance = 10;
+    function setupControls(camera, renderer) {
+        if (controls.value) {
+            // If controls already exist, just update their properties
+            updateControlsProperties();
+        } else {
+            // If controls don't exist, create new ones
+            controls.value = new OrbitControls(camera, renderer.domElement);
+            updateControlsProperties();
+        }
+    }
 
+    function updateControlsProperties() {
+        if (controls.value) {
+            controls.value.enableDamping = true;
+            controls.value.dampingFactor = 0.1;
+            controls.value.rotateSpeed = 0.4;
+            controls.value.maxDistance = 100000;
+            controls.value.minDistance = 10;
+        }
+    }
+
+// Don't forget to dispose of controls when they're no longer needed
+    function disposeControls() {
+        if (controls.value) {
+            controls.value.dispose();
+            controls.value = null;
+        }
+    }
+
+    function setupLights() {
         scene.add(graph);
 
         pointLight.position.set(200, 300, 200);
@@ -46,23 +79,22 @@ export function useThreeJS(container, initialData) {
             scene.add(pointLight);
             scene.add(pointLight2);
         }
+    }
 
+    // Use a closure to ensure event listeners are only added once
+    function setupEventListeners() {
         window.addEventListener('keydown', handleKeyDown);
         window.addEventListener('keyup', handleKeyUp);
+    }
 
-        // Calculate bounding box of all visible nodes
-        const boundingBox = new THREE.Box3();
-        graph.children.forEach(child => {
-            if (child.visible) {
-                boundingBox.expandByObject(child);
-            }
-        });
+    function cleanupEventListeners() {
+        window.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener('keyup', handleKeyUp);
+    }
 
-        // Adjust camera to fit all visible nodes
-        const center = new THREE.Vector3();
-        boundingBox.getCenter(center);
-        const size = new THREE.Vector3();
-        boundingBox.getSize(size);
+    function adjustCameraToFitScene() {
+        const boundingBox = calculateBoundingBox();
+        const { center, size } = getBoundingBoxProperties(boundingBox);
 
         const maxDim = Math.max(size.x, size.y, size.z);
         const fov = camera.fov * (Math.PI / 180);
@@ -79,22 +111,33 @@ export function useThreeJS(container, initialData) {
         controls.value.update();
     }
 
+    function calculateBoundingBox() {
+        const boundingBox = new THREE.Box3();
+        graph.children.forEach(child => {
+            if (child.visible) {
+                boundingBox.expandByObject(child);
+            }
+        });
+        return boundingBox;
+    }
+
+    function getBoundingBoxProperties(boundingBox) {
+        const center = new THREE.Vector3();
+        const size = new THREE.Vector3();
+        boundingBox.getCenter(center);
+        boundingBox.getSize(size);
+        return { center, size };
+    }
+
     function handleKeyDown(event) {
         if (event.key === 'Shift') {
             isShiftPressed.value = true;
-            console.log(isShiftPressed.value)
-            if (controls.value) {
-                controls.value.enableZoom = false;
-            }
         }
     }
 
     function handleKeyUp(event) {
         if (event.key === 'Shift') {
             isShiftPressed.value = false;
-            if (controls.value) {
-                controls.value.enableZoom = true;
-            }
         }
     }
 
@@ -151,6 +194,12 @@ export function useThreeJS(container, initialData) {
         }
     }
 
+    watch(isShiftPressed, (newValue) => {
+        if (controls.value) {
+            controls.value.enableZoom = !newValue;
+        }
+    });
+
     watch(() => initialData.value, (newData) => {
         if (newData && newData.length > 0) {
             isDataReady.value = true;
@@ -166,6 +215,8 @@ export function useThreeJS(container, initialData) {
 
     onUnmounted(() => {
         stopRenderLoop();
+        cleanupEventListeners();
+        disposeControls();
         window.removeEventListener('resize', handleResize);
     });
 
@@ -179,6 +230,7 @@ export function useThreeJS(container, initialData) {
         startRenderLoop,
         stopRenderLoop,
         toggleLights,
+        initVisualization,
         lightsOn,
         isShiftPressed,
         isDataReady,

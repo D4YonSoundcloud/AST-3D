@@ -288,54 +288,54 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
     function onNodeLeftClick(node) {
         if (isCameraAnimating.value) return;
 
-        if (!originalCameraPosition.value) {
-            originalCameraPosition.value = camera.position.clone();
-            originalControlsTarget.value = controls.value.target.clone();
-        }
-
-        const relatedNodes = settingsStore.highlightDirection === 'down' ? getChildNodes(node) : getParentNodes(node);
-        const boundingBox = new THREE.Box3();
-
-        relatedNodes.forEach(connectedNode => {
-            boundingBox.expandByObject(connectedNode);
-        });
-
-        const center = new THREE.Vector3();
-        boundingBox.getCenter(center);
-
-        const size = new THREE.Vector3();
-        boundingBox.getSize(size);
-
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const fov = camera.fov * (Math.PI / 180);
-        const cameraDistance = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.5;
-
-        const newPosition = new THREE.Vector3(
-            center.x + cameraDistance,
-            center.y + cameraDistance / 2,
-            center.z + cameraDistance
-        );
-
-        isCameraAnimating.value = true;
-
-        gsap.to(camera.position, {
-            duration: 0.8,
-            x: newPosition.x,
-            y: newPosition.y,
-            z: newPosition.z,
-            onUpdate: () => camera.updateProjectionMatrix(),
-            onComplete: () => {
-                isCameraAnimating.value = false;
-            },
-        });
-
-        gsap.to(controls.value.target, {
-            duration: 0.8,
-            x: center.x,
-            y: center.y,
-            z: center.z,
-            onUpdate: () => controls.value.update(),
-        });
+        // if (!originalCameraPosition.value) {
+        //     originalCameraPosition.value = camera.position.clone();
+        //     originalControlsTarget.value = controls.value.target.clone();
+        // }
+        //
+        // const relatedNodes = settingsStore.highlightDirection === 'down' ? getChildNodes(node) : getParentNodes(node);
+        // const boundingBox = new THREE.Box3();
+        //
+        // relatedNodes.forEach(connectedNode => {
+        //     boundingBox.expandByObject(connectedNode);
+        // });
+        //
+        // const center = new THREE.Vector3();
+        // boundingBox.getCenter(center);
+        //
+        // const size = new THREE.Vector3();
+        // boundingBox.getSize(size);
+        //
+        // const maxDim = Math.max(size.x, size.y, size.z);
+        // const fov = camera.fov * (Math.PI / 180);
+        // const cameraDistance = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.5;
+        //
+        // const newPosition = new THREE.Vector3(
+        //     center.x + cameraDistance,
+        //     center.y + cameraDistance / 2,
+        //     center.z + cameraDistance
+        // );
+        //
+        // isCameraAnimating.value = true;
+        //
+        // gsap.to(camera.position, {
+        //     duration: 0.8,
+        //     x: newPosition.x,
+        //     y: newPosition.y,
+        //     z: newPosition.z,
+        //     onUpdate: () => camera.updateProjectionMatrix(),
+        //     onComplete: () => {
+        //         isCameraAnimating.value = false;
+        //     },
+        // });
+        //
+        // gsap.to(controls.value.target, {
+        //     duration: 0.8,
+        //     x: center.x,
+        //     y: center.y,
+        //     z: center.z,
+        //     onUpdate: () => controls.value.update(),
+        // });
 
         selectedNode.value = node.userData.id;
         maxPossibleDepth.value = calculateMaxDepth(node);
@@ -350,27 +350,27 @@ export function useNodeInteractions(scene, camera, controls, graph, updateInfoPa
     }
 
     function onNodeRightClick() {
-        if (originalCameraPosition.value && originalControlsTarget.value) {
-
-            gsap.to(camera.position, {
-                duration: 0.8,
-                x: originalCameraPosition.value.x,
-                y: originalCameraPosition.value.y,
-                z: originalCameraPosition.value.z,
-                onUpdate: () => camera.updateProjectionMatrix(),
-                onComplete: () => {
-                    isCameraAnimating.value = false;
-                },
-            });
-
-            gsap.to(controls.value.target, {
-                duration: 0.8,
-                x: originalControlsTarget.value.x,
-                y: originalControlsTarget.value.y,
-                z: originalControlsTarget.value.z,
-                onUpdate: () => controls.value.update(),
-            });
-        }
+        // if (originalCameraPosition.value && originalControlsTarget.value) {
+        //
+        //     gsap.to(camera.position, {
+        //         duration: 0.8,
+        //         x: originalCameraPosition.value.x,
+        //         y: originalCameraPosition.value.y,
+        //         z: originalCameraPosition.value.z,
+        //         onUpdate: () => camera.updateProjectionMatrix(),
+        //         onComplete: () => {
+        //             isCameraAnimating.value = false;
+        //         },
+        //     });
+        //
+        //     gsap.to(controls.value.target, {
+        //         duration: 0.8,
+        //         x: originalControlsTarget.value.x,
+        //         y: originalControlsTarget.value.y,
+        //         z: originalControlsTarget.value.z,
+        //         onUpdate: () => controls.value.update(),
+        //     });
+        // }
 
         selectedNode.value = null;
         hoveredNode.value = null;
