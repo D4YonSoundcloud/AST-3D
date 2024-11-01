@@ -4,9 +4,11 @@ import * as THREE from 'three';
 import { useThreeJS } from '../composables/useThreeJS';
 import { useNodeInteractions } from '../composables/useNodeInteractions';
 import { useAstVisualization } from '../composables/useAstVisualization';
+import { useBoundingBox } from '../composables/useBoundingBox';
 import { useAstStore } from '../stores/astStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import VisualizationControls from './VisualizationControls.vue';
+
 
 const astStore = useAstStore();
 const settingsStore = useSettingsStore();
@@ -71,6 +73,14 @@ const {
   recalculateAllNodePositions,
   isTransitioning,
 } = useAstVisualization(scene, graph);
+
+const {
+  visible: boxVisible,
+  updateBoundingBox,
+  toggleVisibility: toggleBoundingBox
+} = useBoundingBox(scene, {
+  color: 0x7c4dff
+});
 
 defineExpose({
   handleThreeResize: () => {
@@ -167,6 +177,8 @@ watch(() => settingsStore.modelType, async () => {
   updateVisibility(props.visibleNodeTypes);
   initVisualization();
   updateHighlight();
+
+  updateBoundingBox(graph);
 });
 
 watch(() => props.nodes, (newNodes) => {
@@ -174,11 +186,14 @@ watch(() => props.nodes, (newNodes) => {
   initialData.value = newNodes; // This will trigger the watcher in useThreeJS
   updateVisualization(props.nodes, props.links);
   updateVisibility(props.visibleNodeTypes);
+
+  updateBoundingBox(graph);
 }, { deep: true });
 
 watch(() => props.visibleNodeTypes, () => {
   console.log('updating visibility from watch', props.visibleNodeTypes)
   updateVisibility(props.visibleNodeTypes);
+  updateBoundingBox(graph);
 }, { deep: true });
 
 
@@ -215,7 +230,7 @@ onUnmounted(() => {
     <div v-if="isTransitioning" class="recalculating-overlay">
       Loading
     </div>
-    <VisualizationControls :maxPossibleDepth="maxPossibleDepth"/>
+    <VisualizationControls :maxPossibleDepth="maxPossibleDepth" :boxVisible="boxVisible" @toggleBoundingBox="toggleBoundingBox"/>
   </div>
 </template>
 

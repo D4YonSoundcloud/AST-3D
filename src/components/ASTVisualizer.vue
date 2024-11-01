@@ -225,10 +225,6 @@ body, html {
 
 
 
-.node-type-option:hover{
-  background: var(--hover-color);
-}
-
 .node-type-icon {
   margin-left: 0.5rem;
   fill: currentColor;

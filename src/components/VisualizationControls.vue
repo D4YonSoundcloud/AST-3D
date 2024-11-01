@@ -10,6 +10,10 @@ const props = defineProps({
   maxPossibleDepth: {
     type: Number,
     default: 0
+  },
+  boxVisible: {
+    type: Boolean,
+    required: true
   }
 });
 
@@ -23,6 +27,10 @@ const isMaxDepth = computed(() => {
 
 const modelTypes = ['city', 'tree', 'tree2d'];
 
+const emit = defineEmits([
+  'toggleBoundingBox'
+]);
+
 function updateHighlightDepth(event) {
   const newDepth = parseInt(event.target.value);
   settingsStore.updateHighlightDepth(newDepth);
@@ -33,7 +41,6 @@ function updateNonConnectedOpacity(event) {
   settingsStore.updateNonConnectedOpacity(newOpacity);
 }
 
-
 function toggleHighlightDirection() {
   highlightDirection.value = highlightDirection.value === 'down' ? 'up' : 'down';
   settingsStore.updateHighlightDirection(highlightDirection.value);
@@ -43,6 +50,9 @@ function changeModelType(event) {
   settingsStore.updateModelType(event.target.value);
 }
 
+function toggleBoundingBox() {
+  emit('toggleBoundingBox');
+}
 
 watch(() => settingsStore.highlightDepth, (newDepth) => {
   localHighlightDepth.value = newDepth;
@@ -56,6 +66,21 @@ watch(() => settingsStore.nonConnectedOpacity, (newOpacity) => {
 
 <template>
   <div class="visualization-controls">
+    <div class="control-group">
+      <div class="node-type-option" @click="toggleBoundingBox">
+        <label>
+          <input type="checkbox" :checked="boxVisible" @change="toggleBoundingBox">
+          <span class="toggle-switch"></span>
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+            <polyline points="3.29 7 12 12 20.71 7" />
+            <line x1="12" y1="22" x2="12" y2="12" />
+          </svg>
+          <span class="node-type-name">Boundary</span>
+        </label>
+      </div>
+    </div>
+
     <div class="control-group">
       <label for="depth-level">
         Depth Level: {{ isMaxDepth ? '[MAX]' : '' }}
@@ -94,6 +119,8 @@ watch(() => settingsStore.nonConnectedOpacity, (newOpacity) => {
         </option>
       </select>
     </div>
+
+
 <!--    <div class="control-group">-->
 <!--      <label for="direction">Highlight Direction:</label>-->
 <!--      <button id="direction" @click="toggleHighlightDirection">-->
@@ -201,5 +228,72 @@ input[type="range"]::-moz-range-thumb {
   border-radius: 50%;
   background: var(--primary-color);
   cursor: grabbing;
+}
+
+.visualization-controls label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.visualization-controls input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.node-type-option {
+  padding: 0.5rem 0rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.node-type-option label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  width: 100%;
+}
+
+.node-type-option input[type="checkbox"] {
+  display: none;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 20px;
+  height: 10px;
+  background-color: var(--node-bg);
+  border-radius: 2px;
+  margin-right: 0.5rem;
+}
+
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 25%;
+  background-color: var(--text-color);
+  top: 1px;
+  left: 1px;
+}
+
+.node-type-option input[type="checkbox"]:checked + .toggle-switch {
+  background-color: var(--primary-color);
+}
+
+.node-type-option input[type="checkbox"]:checked + .toggle-switch::after {
+  transform: translateX(10px);
+}
+
+.node-type-name {
+  margin-left: 0.5rem;
+  font-size: 0.9rem;
+}
+
+svg {
+  color: var(--text-color);
 }
 </style>
